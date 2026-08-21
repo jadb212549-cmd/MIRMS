@@ -56,51 +56,77 @@ jobs:
         env:
           RUST_BACKTRACE: 1
 
-      - name: Assemble Portable Distribution with Visible Data Folder Beside EXE
-        shell: bash
+      - name: Assemble Portable Distribution & Verify ZIP
+        shell: pwsh
         run: |
-          # Create root portable distribution directory
-          DIST_DIR="ReferenceTracker-Windows-Portable"
-          mkdir -p "$DIST_DIR"
+          $ErrorActionPreference = 'Stop'
 
-          # Create visible data folders directly beside the portable executable
-          mkdir -p "$DIST_DIR/ReferenceTracker_Data/database"
-          mkdir -p "$DIST_DIR/ReferenceTracker_Data/references/PHOTOS"
-          mkdir -p "$DIST_DIR/ReferenceTracker_Data/references/ATTACHMENTS"
-          mkdir -p "$DIST_DIR/ReferenceTracker_Data/references/FORMS"
-          mkdir -p "$DIST_DIR/ReferenceTracker_Data/templates"
-          mkdir -p "$DIST_DIR/ReferenceTracker_Data/backups"
+          Write-Host "=== Step 1: Searching for compiled Windows executable (.exe) ==="
+          $targetDir = "src-tauri/target"
+          if (-not (Test-Path $targetDir)) {
+              $targetDir = "target"
+          }
 
-          # Place directory markers and documentation
-          touch "$DIST_DIR/ReferenceTracker_Data/database/.gitkeep"
-          touch "$DIST_DIR/ReferenceTracker_Data/references/PHOTOS/.gitkeep"
-          touch "$DIST_DIR/ReferenceTracker_Data/references/ATTACHMENTS/.gitkeep"
-          touch "$DIST_DIR/ReferenceTracker_Data/references/FORMS/.gitkeep"
-          touch "$DIST_DIR/ReferenceTracker_Data/templates/.gitkeep"
-          touch "$DIST_DIR/ReferenceTracker_Data/backups/.gitkeep"
+          Write-Host "Scanning target directory: $targetDir"
+          if (Test-Path $targetDir) {
+              Get-ChildItem -Path $targetDir -Recurse -Filter "*.exe" | ForEach-Object {
+                  Write-Host " Found exe: $($_.FullName)"
+              }
+          } else {
+              Write-Host "Target directory $targetDir does not exist!"
+          }
 
-          # Copy compiled Windows EXE to the root of the portable package
-          TARGET_EXE=""
-          if [ -f "src-tauri/target/x86_64-pc-windows-msvc/release/material-reference-tracker.exe" ]; then
-            TARGET_EXE="src-tauri/target/x86_64-pc-windows-msvc/release/material-reference-tracker.exe"
-          elif [ -f "src-tauri/target/release/material-reference-tracker.exe" ]; then
-            TARGET_EXE="src-tauri/target/release/material-reference-tracker.exe"
-          elif [ -f "target/x86_64-pc-windows-msvc/release/material-reference-tracker.exe" ]; then
-            TARGET_EXE="target/x86_64-pc-windows-msvc/release/material-reference-tracker.exe"
-          else
-            TARGET_EXE=$(find . -type f -name "material-reference-tracker.exe" | head -n 1)
-          fi
+          # Locate release executable, excluding deps/build/incremental/examples folders
+          $exeFiles = Get-ChildItem -Path . -Recurse -Filter "*.exe" | Where-Object {
+              $_.FullName -notmatch '\\deps\\' -and
+              $_.FullName -notmatch '\\build\\' -and
+              $_.FullName -notmatch '\\incremental\\' -and
+              $_.FullName -notmatch '\\examples\\'
+          }
 
-          if [ -n "$TARGET_EXE" ] && [ -f "$TARGET_EXE" ]; then
-            echo "Successfully found built application executable at: $TARGET_EXE"
-            cp "$TARGET_EXE" "$DIST_DIR/ReferenceTracker.exe"
-          else
-            echo "ERROR: material-reference-tracker.exe could not be located in build output!"
-            exit 1
-          fi
+          $targetExe = $null
+          foreach ($file in $exeFiles) {
+              if ($file.Name -eq "material-reference-tracker.exe" -or $file.Name -eq "ReferenceTracker.exe") {
+                  $targetExe = $file.FullName
+                  break
+              }
+          }
 
-          # Create descriptive README for portable data placement
-          cat << '          EOF' | sed 's/^          //' > "$DIST_DIR/README_PORTABLE.txt"
+          if (-not $targetExe -and $exeFiles.Count -gt 0) {
+              $targetExe = $exeFiles[0].FullName
+          }
+
+          if (-not $targetExe -or -not (Test-Path $targetExe)) {
+              Write-Error "CRITICAL ERROR: No compiled application executable (.exe) found in target release directories!"
+              exit 1
+          }
+
+          Write-Host "Successfully detected binary executable at: $targetExe"
+
+          Write-Host "=== Step 2: Assembling Portable Distribution Directory ==="
+          $distDir = "ReferenceTracker-Windows-Portable"
+          if (Test-Path $distDir) {
+              Remove-Item $distDir -Recurse -Force
+          }
+
+          New-Item -ItemType Directory -Path "$distDir/ReferenceTracker_Data/database" -Force | Out-Null
+          New-Item -ItemType Directory -Path "$distDir/ReferenceTracker_Data/references/PHOTOS" -Force | Out-Null
+          New-Item -ItemType Directory -Path "$distDir/ReferenceTracker_Data/references/ATTACHMENTS" -Force | Out-Null
+          New-Item -ItemType Directory -Path "$distDir/ReferenceTracker_Data/references/FORMS" -Force | Out-Null
+          New-Item -ItemType Directory -Path "$distDir/ReferenceTracker_Data/templates" -Force | Out-Null
+          New-Item -ItemType Directory -Path "$distDir/ReferenceTracker_Data/backups" -Force | Out-Null
+
+          New-Item -ItemType File -Path "$distDir/ReferenceTracker_Data/database/.gitkeep" -Force | Out-Null
+          New-Item -ItemType File -Path "$distDir/ReferenceTracker_Data/references/PHOTOS/.gitkeep" -Force | Out-Null
+          New-Item -ItemType File -Path "$distDir/ReferenceTracker_Data/references/ATTACHMENTS/.gitkeep" -Force | Out-Null
+          New-Item -ItemType File -Path "$distDir/ReferenceTracker_Data/references/FORMS/.gitkeep" -Force | Out-Null
+          New-Item -ItemType File -Path "$distDir/ReferenceTracker_Data/templates/.gitkeep" -Force | Out-Null
+          New-Item -ItemType File -Path "$distDir/ReferenceTracker_Data/backups/.gitkeep" -Force | Out-Null
+
+          Copy-Item -Path $targetExe -Destination "$distDir/ReferenceTracker.exe" -Force
+
+          # Create README_PORTABLE.txt
+          @'
           ================================================================================
           MATERIAL REFERENCE & SAMPLE TRACKING SYSTEM (PORTABLE WINDOWS EDITION)
           ================================================================================
@@ -131,28 +157,49 @@ jobs:
                revisions, specifications, and physical retention tracking. Stock counts
                and inventory quantities are excluded by design.
           ================================================================================
-          EOF
+          '@ | Set-Content -Path "$distDir/README_PORTABLE.txt" -Encoding UTF8
 
-          # Create one-click Windows launcher helper
-          cat << '          EOF' | sed 's/^          //' > "$DIST_DIR/START_PORTABLE.bat"
+          # Create START_PORTABLE.bat
+          @'
           @echo off
           title Material Reference & Sample Tracker
           start "" "%~dp0ReferenceTracker.exe"
           exit
-          EOF
+          '@ | Set-Content -Path "$distDir/START_PORTABLE.bat" -Encoding ASCII
 
-          # Create Database info file inside the visible data folder
-          cat << '          EOF' | sed 's/^          //' > "$DIST_DIR/ReferenceTracker_Data/database/ABOUT_DATABASE.txt"
+          # Create ABOUT_DATABASE.txt
+          @'
           This directory stores the offline SQLite database (material_reference.db).
           The database contains:
           - Master Item Catalog (Raw Materials RM and Packaging Supplies PS)
           - Sample Registrations & Revisions
           - Full Audit Trail Logs
           - System Configuration & Custom Field Schema
-          EOF
+          '@ | Set-Content -Path "$distDir/ReferenceTracker_Data/database/ABOUT_DATABASE.txt" -Encoding UTF8
 
-          # Compress to zip for artifact upload and release
-          7z a -tzip ReferenceTracker-Windows-Portable-x64.zip "$DIST_DIR"
+          Write-Host "Portable directory structure assembled successfully."
+
+          Write-Host "=== Step 3: Creating Portable ZIP Archive ==="
+          $zipName = "ReferenceTracker-Windows-Portable-x64.zip"
+          if (Test-Path $zipName) {
+              Remove-Item $zipName -Force
+          }
+
+          Compress-Archive -Path $distDir -DestinationPath $zipName -Force
+
+          Write-Host "=== Step 4: Verifying Created ZIP Archive ==="
+          if (-not (Test-Path $zipName)) {
+              Write-Error "CRITICAL ERROR: Failed to create expected ZIP file '$zipName'!"
+              exit 1
+          }
+
+          $zipFile = Get-Item $zipName
+          if ($zipFile.Length -le 0) {
+              Write-Error "CRITICAL ERROR: Created ZIP file '$zipName' is 0 bytes!"
+              exit 1
+          }
+
+          Write-Host "SUCCESS: Verified '$zipName' exists (Size: $($zipFile.Length) bytes)."
 
       - name: Upload Windows Portable Artifact
         uses: actions/upload-artifact@v4
