@@ -1,0 +1,25 @@
+node_modules/
+build/
+dist/
+dist-ssr/
+release_dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Tauri & Rust artifacts
+src-tauri/target/
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# User Data & Backups (Keep data separate from git)
+ReferenceTracker_Data/
+backups/
+*.zip
+

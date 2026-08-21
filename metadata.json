@@ -1,0 +1,6 @@
+{
+  "name": "Material Inspection & Reference Management System",
+  "description": "Tauri-ready Windows portable material master reference and sample registration tracking system with SQLite persistence, offline document generation, Excel import/export, and zero inventory tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
