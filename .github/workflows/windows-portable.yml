@@ -79,13 +79,23 @@ jobs:
           touch "$DIST_DIR/ReferenceTracker_Data/backups/.gitkeep"
 
           # Copy compiled Windows EXE to the root of the portable package
+          TARGET_EXE=""
           if [ -f "src-tauri/target/x86_64-pc-windows-msvc/release/material-reference-tracker.exe" ]; then
-            cp "src-tauri/target/x86_64-pc-windows-msvc/release/material-reference-tracker.exe" "$DIST_DIR/ReferenceTracker.exe"
+            TARGET_EXE="src-tauri/target/x86_64-pc-windows-msvc/release/material-reference-tracker.exe"
           elif [ -f "src-tauri/target/release/material-reference-tracker.exe" ]; then
-            cp "src-tauri/target/release/material-reference-tracker.exe" "$DIST_DIR/ReferenceTracker.exe"
+            TARGET_EXE="src-tauri/target/release/material-reference-tracker.exe"
+          elif [ -f "target/x86_64-pc-windows-msvc/release/material-reference-tracker.exe" ]; then
+            TARGET_EXE="target/x86_64-pc-windows-msvc/release/material-reference-tracker.exe"
           else
-            echo "Searching for executable..."
-            find src-tauri/target -name "*.exe" -exec cp {} "$DIST_DIR/ReferenceTracker.exe" \;
+            TARGET_EXE=$(find . -type f -name "material-reference-tracker.exe" | head -n 1)
+          fi
+
+          if [ -n "$TARGET_EXE" ] && [ -f "$TARGET_EXE" ]; then
+            echo "Successfully found built application executable at: $TARGET_EXE"
+            cp "$TARGET_EXE" "$DIST_DIR/ReferenceTracker.exe"
+          else
+            echo "ERROR: material-reference-tracker.exe could not be located in build output!"
+            exit 1
           fi
 
           # Create descriptive README for portable data placement
