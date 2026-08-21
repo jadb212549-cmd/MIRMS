@@ -99,56 +99,56 @@ jobs:
           fi
 
           # Create descriptive README for portable data placement
-          cat << 'EOF' > "$DIST_DIR/README_PORTABLE.txt"
-================================================================================
-MATERIAL REFERENCE & SAMPLE TRACKING SYSTEM (PORTABLE WINDOWS EDITION)
-================================================================================
+          cat << '          EOF' | sed 's/^          //' > "$DIST_DIR/README_PORTABLE.txt"
+          ================================================================================
+          MATERIAL REFERENCE & SAMPLE TRACKING SYSTEM (PORTABLE WINDOWS EDITION)
+          ================================================================================
 
-1. PORTABLE STORAGE ARCHITECTURE:
-   - All your master catalog items, sample reference records, photo attachments,
-     specification documents, and audit trails are stored right beside this
-     executable inside the "ReferenceTracker_Data" folder.
-   - SQLite Database file: ReferenceTracker_Data/database/material_reference.db
-   - High-Res Specimen Photos: ReferenceTracker_Data/references/PHOTOS/
-   - Specification & TDS Files: ReferenceTracker_Data/references/ATTACHMENTS/
-   - Generated Word Documents: ReferenceTracker_Data/references/FORMS/
-   - Custom Word Form Templates: ReferenceTracker_Data/templates/
-   - Full Portable Backups: ReferenceTracker_Data/backups/
+          1. PORTABLE STORAGE ARCHITECTURE:
+             - All your master catalog items, sample reference records, photo attachments,
+               specification documents, and audit trails are stored right beside this
+               executable inside the "ReferenceTracker_Data" folder.
+             - SQLite Database file: ReferenceTracker_Data/database/material_reference.db
+             - High-Res Specimen Photos: ReferenceTracker_Data/references/PHOTOS/
+             - Specification & TDS Files: ReferenceTracker_Data/references/ATTACHMENTS/
+             - Generated Word Documents: ReferenceTracker_Data/references/FORMS/
+             - Custom Word Form Templates: ReferenceTracker_Data/templates/
+             - Full Portable Backups: ReferenceTracker_Data/backups/
 
-2. HOW TO RUN:
-   - Double-click "ReferenceTracker.exe" (or "START_PORTABLE.bat") to launch.
-   - No installation, admin privileges, or cloud setup required.
-   - Works 100% offline.
+          2. HOW TO RUN:
+             - Double-click "ReferenceTracker.exe" (or "START_PORTABLE.bat") to launch.
+             - No installation, admin privileges, or cloud setup required.
+             - Works 100% offline.
 
-3. HOW TO BACK UP OR TRANSFER TO A USB DRIVE:
-   - Simply copy the entire folder containing "ReferenceTracker.exe" and
-     "ReferenceTracker_Data" to any USB flash drive or external storage.
-   - All data stays intact and portable across any Windows PC.
+          3. HOW TO BACK UP OR TRANSFER TO A USB DRIVE:
+             - Simply copy the entire folder containing "ReferenceTracker.exe" and
+               "ReferenceTracker_Data" to any USB flash drive or external storage.
+             - All data stays intact and portable across any Windows PC.
 
-4. ZERO INVENTORY DESIGN MANDATE:
-   - This system is engineered specifically for reference sample quality,
-     revisions, specifications, and physical retention tracking. Stock counts
-     and inventory quantities are excluded by design.
-================================================================================
-EOF
+          4. ZERO INVENTORY DESIGN MANDATE:
+             - This system is engineered specifically for reference sample quality,
+               revisions, specifications, and physical retention tracking. Stock counts
+               and inventory quantities are excluded by design.
+          ================================================================================
+          EOF
 
           # Create one-click Windows launcher helper
-          cat << 'EOF' > "$DIST_DIR/START_PORTABLE.bat"
-@echo off
-title Material Reference & Sample Tracker
-start "" "%~dp0ReferenceTracker.exe"
-exit
-EOF
+          cat << '          EOF' | sed 's/^          //' > "$DIST_DIR/START_PORTABLE.bat"
+          @echo off
+          title Material Reference & Sample Tracker
+          start "" "%~dp0ReferenceTracker.exe"
+          exit
+          EOF
 
           # Create Database info file inside the visible data folder
-          cat << 'EOF' > "$DIST_DIR/ReferenceTracker_Data/database/ABOUT_DATABASE.txt"
-This directory stores the offline SQLite database (material_reference.db).
-The database contains:
-- Master Item Catalog (Raw Materials RM and Packaging Supplies PS)
-- Sample Registrations & Revisions
-- Full Audit Trail Logs
-- System Configuration & Custom Field Schema
-EOF
+          cat << '          EOF' | sed 's/^          //' > "$DIST_DIR/ReferenceTracker_Data/database/ABOUT_DATABASE.txt"
+          This directory stores the offline SQLite database (material_reference.db).
+          The database contains:
+          - Master Item Catalog (Raw Materials RM and Packaging Supplies PS)
+          - Sample Registrations & Revisions
+          - Full Audit Trail Logs
+          - System Configuration & Custom Field Schema
+          EOF
 
           # Compress to zip for artifact upload and release
           7z a -tzip ReferenceTracker-Windows-Portable-x64.zip "$DIST_DIR"
