@@ -565,6 +565,18 @@ class DatabaseService {
     return { success: true, registration: newReg };
   }
 
+  public getNextRevision(currentRev: string): string {
+    if (!currentRev) return 'Rev 02';
+    const match = currentRev.match(/(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10) + 1;
+      const padded = num < 10 ? `0${num}` : `${num}`;
+      const prefix = currentRev.substring(0, match.index);
+      return `${prefix}${padded}`;
+    }
+    return `${currentRev} Rev 02`;
+  }
+
   public async updateRegistration(
     id: string,
     updates: Partial<Omit<ReferenceRegistration, 'id' | 'createdAt'>>,
@@ -595,27 +607,31 @@ class DatabaseService {
       updates.masterItemId = master.id;
     }
 
-    // Capture revision history snapshot if revision or specification changed
+    // Determine new revision: auto-increment revision on edit if not explicitly incremented or matches current
+    let newRevision = updates.revision && updates.revision.trim()
+      ? updates.revision.trim()
+      : this.getNextRevision(current.revision || 'Rev 01');
+
+    if (newRevision === current.revision) {
+      newRevision = this.getNextRevision(current.revision);
+    }
+
+    // Capture revision history snapshot of current state before updating
     let revisionHistory = current.revisionHistory ? [...current.revisionHistory] : [];
-    if (
-      (updates.revision && updates.revision !== current.revision) ||
-      (updates.specification !== undefined && updates.specification !== current.specification)
-    ) {
-      const snapshot = {
-        id: `rev-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        revision: current.revision || 'Rev 01',
-        date: current.registrationDate || current.createdAt.split('T')[0],
-        author: author || current.registeredBy || 'Inspector',
-        specification: current.specification,
-        remarks: current.remarks,
-        supplier: current.supplier,
-        changeSummary: updates.revision && updates.revision !== current.revision
-          ? `Revised from ${current.revision} to ${updates.revision}`
-          : 'Specification update'
-      };
-      if (!revisionHistory.some((r) => r.revision === snapshot.revision && r.date === snapshot.date)) {
-        revisionHistory.unshift(snapshot);
-      }
+    
+    const snapshot = {
+      id: `rev-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      revision: current.revision || 'Rev 01',
+      date: current.registrationDate || new Date().toISOString().split('T')[0],
+      author: author || current.registeredBy || 'Inspector',
+      specification: current.specification,
+      remarks: current.remarks,
+      supplier: current.supplier,
+      changeSummary: `Revised from ${current.revision || 'Rev 01'} to ${newRevision}`
+    };
+
+    if (!revisionHistory.some((r) => r.revision === snapshot.revision && r.date === snapshot.date)) {
+      revisionHistory.unshift(snapshot);
     }
 
     if (updates.category && updates.category.trim()) {
@@ -625,6 +641,7 @@ class DatabaseService {
     const updated: ReferenceRegistration = {
       ...current,
       ...updates,
+      revision: newRevision,
       revisionHistory,
       updatedAt: new Date().toISOString()
     };
@@ -639,7 +656,7 @@ class DatabaseService {
       entityType: 'REFERENCE',
       entityId: updated.id,
       entityIdentifier: updated.productCode,
-      details: `Updated reference registration for "${updated.productCode}" (${updated.revision})`
+      details: `Updated reference registration for "${updated.productCode}" (${updated.revision}) - Revision history updated`
     });
 
     if (isTauri()) {

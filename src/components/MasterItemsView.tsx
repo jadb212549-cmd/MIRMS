@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { MasterItem, ReferenceRegistration, ItemCategory, ItemStatus } from '../types';
-import { Database, Plus, Search, Filter, FileSpreadsheet, ShieldCheck, Edit3, Trash2, ShieldAlert, Calendar, X, Tag, Clock, Check, ChevronDown, Sparkles, RefreshCw, Camera, User } from 'lucide-react';
+import { Database, Plus, Search, Filter, FileSpreadsheet, ShieldCheck, Edit3, Trash2, ShieldAlert, Calendar, X, Clock, Check, ChevronDown, Sparkles, RefreshCw, Camera, User } from 'lucide-react';
 import { excelService } from '../services/excelService';
 
 interface MasterItemsViewProps {
@@ -39,15 +39,6 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
       onSearchChange(val);
     }
   };
-
-  // Specific Name / Description Filter
-  const [nameFilter, setNameFilter] = useState('');
-
-  // Distinct item names for quick auto-complete filter selection
-  const distinctItemNames = useMemo(() => {
-    const names = Array.from(new Set(masterItems.map((m) => m.description).filter(Boolean))) as string[];
-    return names.sort((a, b) => a.localeCompare(b));
-  }, [masterItems]);
 
   // Registered By / Personnel Filter
   const [registeredByFilter, setRegisteredByFilter] = useState<string>('ALL');
@@ -129,12 +120,6 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
         item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (item.unit && item.unit.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      // 2. Dedicated Name / Description Filter
-      const nameMatch =
-        nameFilter.trim() === '' ||
-        item.description.toLowerCase().includes(nameFilter.trim().toLowerCase()) ||
-        item.productCode.toLowerCase().includes(nameFilter.trim().toLowerCase());
-
       // 3. Material Type Filter
       const matMatch = materialTypeFilter === 'ALL' || (item.materialType || (item.category === 'RM' || item.category === 'PS' ? item.category : 'RM')) === materialTypeFilter;
 
@@ -176,12 +161,11 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
         if (customEndDate && itemCreatedDate > customEndDate) dateMatch = false;
       }
 
-      return searchMatch && nameMatch && matMatch && catMatch && statusMatch && regMatch && registeredByMatch && dateMatch;
+      return searchMatch && matMatch && catMatch && statusMatch && regMatch && registeredByMatch && dateMatch;
     });
   }, [
     masterItems,
     searchTerm,
-    nameFilter,
     registeredByFilter,
     materialTypeFilter,
     categoryFilter,
@@ -199,7 +183,6 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
 
   const hasActiveFilters =
     searchTerm !== '' ||
-    nameFilter !== '' ||
     registeredByFilter !== 'ALL' ||
     materialTypeFilter !== 'ALL' ||
     categoryFilter !== 'ALL' ||
@@ -211,7 +194,6 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
 
   const resetAllFilters = () => {
     handleSearchChange('');
-    setNameFilter('');
     setRegisteredByFilter('ALL');
     setMaterialTypeFilter('ALL');
     setCategoryFilter('ALL');
@@ -226,10 +208,10 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
     <div className="space-y-4 select-none">
       {/* Control & Filter Header */}
       <div className="bg-[#141414] p-4 rounded-xl border border-[#222] space-y-3">
-        {/* Primary Row: Global Search, Name Filter, Add & Export */}
+        {/* Primary Row: Global Search, Add & Export */}
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           {/* Global Search Bar */}
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[250px]">
             <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -242,33 +224,6 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
               <button
                 onClick={() => handleSearchChange('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {/* Specific Name Filter (Requested Feature: Filter by Item Name) */}
-          <div className="relative flex-1 min-w-[210px]">
-            <Tag className="w-4 h-4 text-blue-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              list="master-item-names-list"
-              placeholder="Filter by Item Name..."
-              value={nameFilter}
-              onChange={(e) => setNameFilter(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 text-xs bg-[#1A1A1A] border border-blue-900/40 text-blue-200 placeholder-gray-500 rounded-lg focus:outline-hidden focus:border-blue-500 transition-colors font-medium"
-            />
-            <datalist id="master-item-names-list">
-              {distinctItemNames.map((name) => (
-                <option key={name} value={name} />
-              ))}
-            </datalist>
-            {nameFilter && (
-              <button
-                onClick={() => setNameFilter('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                title="Clear Name Filter"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -494,12 +449,6 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
         {hasActiveFilters && (
           <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
             <span className="text-gray-500 font-mono text-[10px] uppercase font-semibold mr-1">Active:</span>
-            {nameFilter && (
-              <span className="inline-flex items-center gap-1 bg-blue-500/10 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded font-mono">
-                Name: "{nameFilter}"
-                <X className="w-3 h-3 cursor-pointer hover:text-white" onClick={() => setNameFilter('')} />
-              </span>
-            )}
             {searchTerm && (
               <span className="inline-flex items-center gap-1 bg-gray-800 text-gray-300 border border-gray-700 px-2 py-0.5 rounded font-mono">
                 Search: "{searchTerm}"
@@ -564,7 +513,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                   <td colSpan={9} className="py-12 text-center text-gray-500">
                     <Database className="w-8 h-8 mx-auto text-gray-600 mb-2" />
                     <p className="font-semibold text-gray-300">No master reference items matched your filter criteria.</p>
-                    <p className="text-xs text-gray-500 mt-1">Try clearing name, date, or category filters.</p>
+                    <p className="text-xs text-gray-500 mt-1">Try clearing search, date, or category filters.</p>
                     {hasActiveFilters && (
                       <button
                         onClick={resetAllFilters}

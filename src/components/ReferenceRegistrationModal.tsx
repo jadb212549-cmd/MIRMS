@@ -44,6 +44,7 @@ interface ReferenceRegistrationModalProps {
   onClose: () => void;
   onSave: (regData: Omit<ReferenceRegistration, 'id' | 'createdAt' | 'updatedAt'>) => Promise<{ success: boolean; error?: string }>;
   masterItems: MasterItem[];
+  registrations: ReferenceRegistration[];
   customFieldDefs: CustomFieldDefinition[];
   defaultUser: string;
   initialMasterItem?: MasterItem | null;
@@ -114,20 +115,43 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     };
   }, []);
 
-  // Filtered auto-suggestions from master items catalog based on what the user types
+  // Helper to increment revision e.g. "Rev 01" -> "Rev 02"
+  const getNextRevision = (currentRev: string): string => {
+    if (!currentRev) return 'Rev 02';
+    const match = currentRev.match(/(\d+)/);
+    if (match) {
+      const num = parseInt(match[1], 10) + 1;
+      const padded = num < 10 ? `0${num}` : `${num}`;
+      const prefix = currentRev.substring(0, match.index);
+      return `${prefix}${padded}`;
+    }
+    return `${currentRev} Rev 02`;
+  };
+
+  // Filtered auto-suggestions from master items catalog based on what the user types, excluding items already registered (unless editing)
   const suggestedMasterItems = useMemo(() => {
     const q = selectedProductCode.trim().toLowerCase();
     if (!q) {
-      return masterItems.slice(0, 8);
+      return []; // Of no letters on the field there should also be no suggestion.
     }
-    return masterItems.filter(
-      (item) =>
+    const registeredCodes = new Set(
+      registrations
+        .filter((r) => !existingRegistration || r.id !== existingRegistration.id)
+        .map((r) => r.productCode.toLowerCase())
+    );
+
+    return masterItems.filter((item) => {
+      if (registeredCodes.has(item.productCode.toLowerCase())) {
+        return false;
+      }
+      return (
         item.productCode.toLowerCase().includes(q) ||
         item.description.toLowerCase().includes(q) ||
         (item.category && item.category.toLowerCase().includes(q)) ||
         (item.materialType && item.materialType.toLowerCase().includes(q))
-    ).slice(0, 10);
-  }, [masterItems, selectedProductCode]);
+      );
+    }).slice(0, 10);
+  }, [masterItems, registrations, selectedProductCode, existingRegistration]);
 
   useEffect(() => {
     const currentUser = userService.getCurrentUser();
@@ -150,7 +174,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
       setSupplier(existingRegistration.supplier || '');
       setSpecification(existingRegistration.specification || '');
       setRemarks(existingRegistration.remarks || '');
-      setRevision(existingRegistration.revision || 'Rev 01');
+      setRevision(getNextRevision(existingRegistration.revision || 'Rev 01')); // Auto-fill next revision like Rev 02, Rev 03
       setCustomFields(existingRegistration.customFields || {});
       setPrintLayout(existingRegistration.printLayout || 'HERO_SINGLE');
 
@@ -189,10 +213,9 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
       setPhotos([]);
       setAttachments([]);
     } else {
-      const firstItem = masterItems[0];
-      setSelectedProductCode(firstItem?.productCode || '');
-      setMaterialType(firstItem?.materialType || 'RM');
-      setCategory(firstItem?.category || 'Box');
+      setSelectedProductCode(''); // Blank on reference registry
+      setMaterialType('RM');
+      setCategory('Box');
       setIsCustomCategory(false);
       setCustomCategoryName('');
       setRegistrationDate(new Date().toISOString().split('T')[0]);
@@ -220,11 +243,25 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     setShowSuggestions(false);
   };
 
-  if (!isOpen) return null;
+  const currentMasterItem = useMemo(() => {
+    return masterItems.find(
+      (m) => m.productCode.toLowerCase() === selectedProductCode.toLowerCase()
+    );
+  }, [masterItems, selectedProductCode]);
 
-  const currentMasterItem = masterItems.find(
-    (m) => m.productCode.toLowerCase() === selectedProductCode.toLowerCase()
-  );
+  useEffect(() => {
+    if (currentMasterItem) {
+      if (currentMasterItem.materialType) {
+        setMaterialType(currentMasterItem.materialType);
+      }
+      if (currentMasterItem.category) {
+        setCategory(currentMasterItem.category);
+        setIsCustomCategory(false);
+      }
+    }
+  }, [currentMasterItem]);
+
+  if (!isOpen) return null;
 
   const handleAddMultiplePhotos = async () => {
     const results = await tauriBridge.pickMultipleImageFiles();
@@ -332,6 +369,16 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     }
     if (!registeredBy.trim()) {
       setError('Registered By is mandatory to track the person who entered the sample.');
+      return;
+    }
+
+    const codeClean = selectedProductCode.trim().toLowerCase();
+    const isDuplicate = registrations.some(
+      (r) => r.productCode.toLowerCase() === codeClean && (!existingRegistration || r.id !== existingRegistration.id)
+    );
+
+    if (isDuplicate) {
+      setError(`Product Code "${selectedProductCode.trim()}" is already registered. Please edit the existing registration or select a different item.`);
       return;
     }
 
@@ -527,76 +574,52 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
               </div>
             </div>
 
-            {/* Material Type & Category Classification */}
+            {/* Material Type & Category Classification (Auto-filled & Locked from Master Item) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                  Material Type <span className="text-red-400">*</span>
+                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono flex items-center justify-between">
+                  <span>Material Type</span>
+                  <span className="text-[10px] font-normal text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-500" />
+                    Auto-filled / Locked
+                  </span>
                 </label>
-                <select
-                  value={materialType}
-                  onChange={(e) => setMaterialType(e.target.value as MaterialType)}
-                  className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-medium cursor-pointer"
-                >
-                  <option value="RM" className="bg-[#1A1A1A] text-gray-200">RM (Raw Material)</option>
-                  <option value="PS" className="bg-[#1A1A1A] text-gray-200">PS (Production Supply)</option>
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    readOnly
+                    tabIndex={-1}
+                    value={materialType === 'PS' ? 'PS (Production Supply)' : 'RM (Raw Material)'}
+                    className="w-full text-xs pl-3 pr-20 py-2 bg-[#141414] border border-[#333] text-cyan-300 font-mono font-medium rounded-lg focus:outline-hidden cursor-not-allowed select-all opacity-95"
+                  />
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded bg-[#202020] border border-[#333] text-[10px] text-gray-400 font-mono pointer-events-none">
+                    <Lock className="w-2.5 h-2.5 text-gray-400" />
+                    <span>Master</span>
+                  </div>
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono flex items-center justify-between">
-                  <span>Category (e.g. Box, Tape) <span className="text-red-400">*</span></span>
-                  {!isCustomCategory ? (
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomCategory(true)}
-                      className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-sans font-medium"
-                    >
-                      <Plus className="w-3 h-3" /> Add New
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomCategory(false)}
-                      className="text-[10px] text-gray-400 hover:text-gray-300 font-sans"
-                    >
-                      From List
-                    </button>
-                  )}
+                  <span>Category</span>
+                  <span className="text-[10px] font-normal text-gray-400 flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-gray-500" />
+                    Auto-filled / Locked
+                  </span>
                 </label>
-
-                {!isCustomCategory ? (
-                  <select
-                    value={category}
-                    onChange={(e) => {
-                      if (e.target.value === '__NEW__') {
-                        setIsCustomCategory(true);
-                      } else {
-                        setCategory(e.target.value);
-                      }
-                    }}
-                    className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-medium cursor-pointer"
-                  >
-                    {categoriesList.map((cat) => (
-                      <option key={cat} value={cat} className="bg-[#1A1A1A] text-gray-200">
-                        {cat}
-                      </option>
-                    ))}
-                    {!categoriesList.includes(category) && category && (
-                      <option value={category} className="bg-[#1A1A1A] text-gray-200">{category}</option>
-                    )}
-                    <option value="__NEW__" className="bg-[#1A1A1A] text-blue-400">+ Add New Category...</option>
-                  </select>
-                ) : (
+                <div className="relative">
                   <input
                     type="text"
-                    placeholder="Enter new category (e.g. Box, Tape, Film)..."
-                    value={customCategoryName}
-                    onChange={(e) => setCustomCategoryName(e.target.value)}
-                    className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-blue-500/50 text-gray-100 rounded-lg focus:outline-hidden focus:border-blue-400"
-                    autoFocus
+                    readOnly
+                    tabIndex={-1}
+                    value={category || 'Box'}
+                    className="w-full text-xs pl-3 pr-20 py-2 bg-[#141414] border border-[#333] text-blue-300 font-mono font-medium rounded-lg focus:outline-hidden cursor-not-allowed select-all opacity-95"
                   />
-                )}
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded bg-[#202020] border border-[#333] text-[10px] text-gray-400 font-mono pointer-events-none">
+                    <Lock className="w-2.5 h-2.5 text-gray-400" />
+                    <span>Master</span>
+                  </div>
+                </div>
               </div>
             </div>
 

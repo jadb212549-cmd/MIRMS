@@ -393,6 +393,7 @@ export default function App() {
         onClose={() => setIsRegModalOpen(false)}
         onSave={handleSaveRegistration}
         masterItems={masterItems}
+        registrations={registrations}
         customFieldDefs={config.customFields || []}
         defaultUser={currentUser ? currentUser.shortName : (config.defaultRegisteredBy || 'JD. Stone')}
         initialMasterItem={regModalMasterItem}
