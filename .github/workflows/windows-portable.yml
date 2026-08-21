@@ -141,7 +141,7 @@ The database contains:
 EOF
 
           # Compress to zip for artifact upload and release
-          7z a -tzip ReferenceTracker-Windows-Portable-x64.zip ./"$DIST_DIR"/*
+          7z a -tzip ReferenceTracker-Windows-Portable-x64.zip "$DIST_DIR"
 
       - name: Upload Windows Portable Artifact
         uses: actions/upload-artifact@v4
@@ -152,7 +152,7 @@ EOF
           retention-days: 90
 
       - name: Create GitHub Release Draft (On Tag Push or Manual Request)
-        if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.create_release == 'true'
+        if: startsWith(github.ref, 'refs/tags/v') || (github.event.inputs && github.event.inputs.create_release == 'true')
         uses: softprops/action-gh-release@v2
         with:
           files: ReferenceTracker-Windows-Portable-x64.zip
