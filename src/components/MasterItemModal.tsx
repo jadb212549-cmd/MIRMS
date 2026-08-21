@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { MasterItem, ItemCategory, ItemStatus } from '../types';
-import { X, Database, AlertCircle } from 'lucide-react';
+import { MasterItem, MaterialType, ItemStatus } from '../types';
+import { X, Database, AlertCircle, Plus } from 'lucide-react';
+import { db } from '../services/db';
 
 interface MasterItemModalProps {
   isOpen: boolean;
@@ -17,23 +18,43 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
 }) => {
   const [productCode, setProductCode] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<ItemCategory>('RM');
+  const [materialType, setMaterialType] = useState<MaterialType>('RM');
+  const [category, setCategory] = useState<string>('Box');
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategoryName, setCustomCategoryName] = useState('');
   const [status, setStatus] = useState<ItemStatus>('Active');
   const [unit, setUnit] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
+    const loadCategories = async () => {
+      const cats = await db.getCategories();
+      setCategoriesList(cats);
+    };
+    if (isOpen) {
+      loadCategories();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (initialItem) {
       setProductCode(initialItem.productCode);
       setDescription(initialItem.description);
-      setCategory(initialItem.category);
+      setMaterialType(initialItem.materialType || 'RM');
+      setCategory(initialItem.category || 'Box');
+      setIsCustomCategory(false);
+      setCustomCategoryName('');
       setStatus(initialItem.status);
       setUnit(initialItem.unit || '');
     } else {
       setProductCode('');
       setDescription('');
-      setCategory('RM');
+      setMaterialType('RM');
+      setCategory('Box');
+      setIsCustomCategory(false);
+      setCustomCategoryName('');
       setStatus('Active');
       setUnit('');
     }
@@ -53,13 +74,20 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
       return;
     }
 
+    const finalCategory = isCustomCategory ? customCategoryName.trim() : category.trim();
+    if (!finalCategory) {
+      setError('Category is required.');
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
 
     const res = await onSave({
       productCode: productCode.trim(),
       description: description.trim(),
-      category,
+      materialType,
+      category: finalCategory,
       status,
       unit: unit.trim() || undefined
     });
@@ -140,15 +168,15 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
             />
           </div>
 
-          {/* Category & Status Grid */}
+          {/* Material Type & Status Grid */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                Category <span className="text-red-400">*</span>
+                Material Type <span className="text-red-400">*</span>
               </label>
               <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as ItemCategory)}
+                value={materialType}
+                onChange={(e) => setMaterialType(e.target.value as MaterialType)}
                 className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-medium cursor-pointer"
               >
                 <option value="RM" className="bg-[#1A1A1A] text-gray-200">RM (Raw Material)</option>
@@ -169,6 +197,68 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
                 <option value="Inactive" className="bg-[#1A1A1A] text-gray-200">Inactive</option>
               </select>
             </div>
+          </div>
+
+          {/* Dynamic Category Selection / Addition */}
+          <div>
+            <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono flex items-center justify-between">
+              <span>Category (e.g. Box, Tape, Metal, Chemicals) <span className="text-red-400">*</span></span>
+              {!isCustomCategory ? (
+                <button
+                  type="button"
+                  onClick={() => setIsCustomCategory(true)}
+                  className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-sans font-medium"
+                >
+                  <Plus className="w-3 h-3" /> Add New Category
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsCustomCategory(false)}
+                  className="text-[10px] text-gray-400 hover:text-gray-300 font-sans"
+                >
+                  Choose from List
+                </button>
+              )}
+            </label>
+
+            {!isCustomCategory ? (
+              <select
+                value={category}
+                onChange={(e) => {
+                  if (e.target.value === '__NEW__') {
+                    setIsCustomCategory(true);
+                  } else {
+                    setCategory(e.target.value);
+                  }
+                }}
+                className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-medium cursor-pointer"
+              >
+                {categoriesList.map((cat) => (
+                  <option key={cat} value={cat} className="bg-[#1A1A1A] text-gray-200">
+                    {cat}
+                  </option>
+                ))}
+                {!categoriesList.includes(category) && category && (
+                  <option value={category} className="bg-[#1A1A1A] text-gray-200">{category}</option>
+                )}
+                <option value="__NEW__" className="bg-[#1A1A1A] text-blue-400">+ Add New Category...</option>
+              </select>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter new category (e.g. Box, Tape, Film, Resin)..."
+                  value={customCategoryName}
+                  onChange={(e) => setCustomCategoryName(e.target.value)}
+                  className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-blue-500/50 text-gray-100 rounded-lg focus:outline-hidden focus:border-blue-400"
+                  autoFocus
+                />
+              </div>
+            )}
+            <p className="text-[11px] text-gray-500 mt-1">
+              Customizable list of item categories.
+            </p>
           </div>
 
           {/* Unit (Reference field only) */}

@@ -19,11 +19,16 @@ import {
   AlertCircle,
   ChevronDown,
   Settings,
-  FolderOpen
+  FolderOpen,
+  LogIn,
+  LogOut,
+  UserCheck
 } from 'lucide-react';
 import { isTauri } from '../services/tauriService';
 import { NavigationTab, MasterItem, ReferenceRegistration } from '../types';
 import { MultiUserPresenceBadge } from './MultiUserPresenceBadge';
+import { userService, AppUser } from '../services/userService';
+import { LoginModal } from './LoginModal';
 
 interface HeaderProps {
   currentTab?: NavigationTab;
@@ -65,6 +70,9 @@ export const Header: React.FC<HeaderProps> = ({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(userService.getCurrentUser());
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
   // Determine active tab key
   const current = currentTab || (activeTab === 'dashboard' ? 'DASHBOARD'
     : activeTab === 'master-items' ? 'MASTER_ITEMS'
@@ -89,6 +97,19 @@ export const Header: React.FC<HeaderProps> = ({
       setActiveTab(mapped);
     }
   };
+
+  useEffect(() => {
+    const unsubscribe = userService.subscribe(() => {
+      setCurrentUser(userService.getCurrentUser());
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (current === 'ADMIN_DASHBOARD' && (!currentUser || currentUser.role !== 'admin')) {
+      handleTabClick('DASHBOARD');
+    }
+  }, [currentUser, current]);
 
   // Keyboard shortcut (Ctrl+K or Cmd+K or '/')
   useEffect(() => {
@@ -240,18 +261,11 @@ export const Header: React.FC<HeaderProps> = ({
   const primaryNavItems: { id: NavigationTab; label: string; icon: React.ReactNode; badge?: string | number }[] = [
     { id: 'DASHBOARD', label: 'Dashboard', icon: <Layers className="w-3.5 h-3.5" /> },
     { id: 'MASTER_ITEMS', label: 'Master Items', icon: <Database className="w-3.5 h-3.5" />, badge: totalMaster },
-    { id: 'REGISTRATIONS', label: 'Reference Registry', icon: <ShieldCheck className="w-3.5 h-3.5" />, badge: registeredCount }
+    { id: 'REGISTRATIONS', label: 'Reference Registry', icon: <ShieldCheck className="w-3.5 h-3.5" />, badge: registeredCount },
+    ...(currentUser?.role === 'admin' ? [{ id: 'ADMIN_DASHBOARD', label: 'Admin Dashboard', icon: <Settings className="w-3.5 h-3.5" /> } as any] : [])
   ];
 
-  const adminItems: { id: NavigationTab; label: string; icon: React.ReactNode; desc: string }[] = [
-    { id: 'EXCEL_MANAGER', label: 'Import / Export', icon: <FileSpreadsheet className="w-3.5 h-3.5" />, desc: 'Bulk Excel upload & CSV exports' },
-    { id: 'WORD_TEMPLATES', label: 'Word Form (DOCX)', icon: <FileText className="w-3.5 h-3.5" />, desc: 'DOCX template generator & print layouts' },
-    { id: 'SHARED_FOLDER', label: 'Shared Folder', icon: <FolderOpen className="w-3.5 h-3.5" />, desc: 'Network shared directory & sync options' },
-    { id: 'AUDIT_TRAIL', label: 'Audit Trail', icon: <History className="w-3.5 h-3.5" />, desc: 'System activity & modification logs' },
-    { id: 'DATA_MANAGEMENT', label: 'Backup & Recovery', icon: <HardDrive className="w-3.5 h-3.5" />, desc: 'Database backups & restore utilities' }
-  ];
-
-  const isAdminActive = adminItems.some((item) => item.id === current);
+  const isAdminActive = current === 'ADMIN_DASHBOARD';
 
   return (
     <header className="bg-[#0F0F0F] border-b border-[#222222] text-[#E5E7EB] sticky top-0 z-50 select-none">
@@ -262,30 +276,13 @@ export const Header: React.FC<HeaderProps> = ({
           
           {/* Centered Large System Title */}
           <div className="flex flex-col items-center justify-center text-center">
-            <div className="flex items-center justify-center gap-2.5">
-              <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-900/40 shrink-0">
-                <Layers className="w-5 h-5" />
-              </div>
-              <h1 className="text-lg sm:text-xl lg:text-2xl font-black tracking-tight text-white drop-shadow-sm">
-                Material Inspection & Reference Management System
-              </h1>
-              <span className="text-[10px] px-2.5 py-0.5 rounded font-mono uppercase tracking-wider bg-blue-500/10 text-blue-400 border border-blue-500/20 shrink-0">
-                {isDesktop ? 'Tauri Desktop v1.0' : 'Offline Portable'}
-              </span>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              QA Material Specimen Catalog, Inspection Certificates & Word (DOCX) Registry
-            </p>
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-black tracking-tight text-white drop-shadow-sm">
+              Material Inspection & Reference Management System
+            </h1>
           </div>
 
           {/* Right Status Badges */}
-          <div className="flex-1 flex items-center justify-center md:justify-end gap-2 text-xs shrink-0">
-            <MultiUserPresenceBadge onNotify={onNotify} />
-            <div className="hidden xl:flex items-center gap-1.5 px-3 py-1.5 bg-[#141414] border border-[#2A2A2A] rounded text-[11px] text-gray-300">
-              <Cpu className="w-3.5 h-3.5 text-blue-400" />
-              <span>Data/material_reference.db</span>
-            </div>
-          </div>
+          <div className="flex-1 hidden md:block"></div>
         </div>
 
         {/* Navigation Row: Primary Tabs, Admin Tab Dropdown, and Global Search Bar Beside Admin */}
@@ -320,68 +317,13 @@ export const Header: React.FC<HeaderProps> = ({
               );
             })}
 
-            {/* Admin Tab with High Z-Index Overlay Dropdown */}
-            <div className="relative z-[9999]" ref={adminDropdownRef}>
-              <button
-                id="nav-tab-admin"
-                onClick={() => setIsAdminOpen((prev) => !prev)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all whitespace-nowrap ${
-                  isAdminActive
-                    ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                    : 'text-gray-400 hover:text-white hover:bg-[#1A1A1A]'
-                }`}
-              >
-                <Settings className="w-3.5 h-3.5 text-blue-400" />
-                <span>Admin</span>
-                {isAdminActive && (
-                  <span className="text-[10px] px-1.5 py-0.2 font-mono rounded bg-blue-800 text-blue-100">
-                    {adminItems.find((i) => i.id === current)?.label || 'Active'}
-                  </span>
-                )}
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isAdminOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {isAdminOpen && (
-                <div className="absolute left-0 mt-2 w-64 bg-[#141414] border border-[#2A2A2A] rounded-xl shadow-2xl py-1 z-[9999] divide-y divide-[#222] animate-in fade-in zoom-in-95 duration-100">
-                  <div className="px-3.5 py-2 bg-[#0C0C0C] rounded-t-xl text-[10px] font-mono text-gray-400 uppercase tracking-wider flex items-center justify-between border-b border-[#222]">
-                    <span>Admin Management</span>
-                    <span className="text-blue-400 font-semibold">{adminItems.length} Tools</span>
-                  </div>
-                  <div className="py-1">
-                    {adminItems.map((subItem) => {
-                      const isSubActive = current === subItem.id;
-                      return (
-                        <button
-                          key={subItem.id}
-                          onClick={() => {
-                            handleTabClick(subItem.id);
-                            setIsAdminOpen(false);
-                          }}
-                          className={`w-full text-left px-3.5 py-2.5 flex items-start gap-2.5 hover:bg-[#202020] transition-colors ${
-                            isSubActive ? 'bg-[#1E293B] text-blue-400 border-l-2 border-blue-500 font-semibold' : 'text-gray-300'
-                          }`}
-                        >
-                          <div className={`p-1.5 rounded-lg mt-0.5 ${isSubActive ? 'bg-blue-500/20 text-blue-400' : 'bg-[#222] text-gray-400 border border-[#333]'}`}>
-                            {subItem.icon}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs flex items-center justify-between font-medium">
-                              <span>{subItem.label}</span>
-                              {isSubActive && <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>}
-                            </div>
-                            <p className="text-[10px] text-gray-500 truncate mt-0.5">{subItem.desc}</p>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Admin Dashboard is a first-class tab in navigation, so no dropdown is needed */}
           </nav>
 
-          {/* Global Search Bar Beside Admin Tab */}
-          <div className="relative flex-1 max-w-sm w-full z-40">
+          {/* Right: Global Search & Login Portal */}
+          <div className="flex items-center gap-3 w-full md:w-auto shrink-0 justify-end flex-1 max-w-md">
+            {/* Global Search Bar Beside Admin Tab */}
+            <div className="relative flex-1 max-w-sm w-full z-40">
             <div className="relative flex items-center">
               <Search className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
               <input
@@ -638,9 +580,50 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             )}
           </div>
+
+          {/* Login Status & Portal trigger */}
+          <div className="shrink-0">
+            {currentUser ? (
+              <div className="flex items-center gap-1.5 bg-[#141414] border border-[#2A2A2A] rounded-xl px-3 py-1.5 text-xs text-gray-200">
+                <div className="p-1 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 shrink-0 flex items-center justify-center">
+                  <UserCheck className="w-3.5 h-3.5" />
+                </div>
+                <div className="flex flex-col text-left">
+                  <span className="font-semibold text-white leading-tight font-mono truncate max-w-[90px]" title={currentUser.fullName}>
+                    {currentUser.shortName}
+                  </span>
+                  <span className="text-[9px] text-gray-500 uppercase tracking-wide leading-none font-bold">
+                    {currentUser.role}
+                  </span>
+                </div>
+                <button
+                  onClick={() => userService.logout()}
+                  className="ml-1.5 p-1 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-all shrink-0"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsLoginModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-98 text-white text-xs font-semibold rounded-xl shadow-md transition-all whitespace-nowrap cursor-pointer"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
-    </header>
+    </div>
+
+    <LoginModal
+      isOpen={isLoginModalOpen}
+      onClose={() => setIsLoginModalOpen(false)}
+      onSuccess={(msg) => onNotify?.('Authentication', msg, 'success')}
+    />
+  </header>
   );
 };
 

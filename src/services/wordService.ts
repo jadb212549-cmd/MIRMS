@@ -12,6 +12,7 @@ import {
   HeadingLevel,
   ShadingType
 } from 'docx';
+import JSZip from 'jszip';
 import { MasterItem, ReferenceRegistration, AppConfig } from '../types';
 import { tauriBridge } from './tauriService';
 import { db } from './db';
@@ -26,14 +27,128 @@ export const wordService = {
     masterItem: MasterItem,
     config: AppConfig
   ): Promise<Blob> {
+    // If a custom Word template (.docx base64) was uploaded, process it using JSZip
+    if (config.wordTemplateContent) {
+      try {
+        const binaryString = atob(config.wordTemplateContent);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        const zip = await JSZip.loadAsync(bytes.buffer);
+
+        // Build key-value replacements dictionary
+        const replacements: Record<string, string> = {
+          productCode: registration.productCode || masterItem.productCode || '',
+          description: masterItem.description || '',
+          materialType: (registration.materialType || masterItem.materialType || (masterItem.category === 'PS' ? 'PS' : 'RM')) === 'PS' ? 'Production Supply (PS)' : 'Raw Material (RM)',
+          materialTypeCode: registration.materialType || masterItem.materialType || (masterItem.category === 'PS' ? 'PS' : 'RM'),
+          category: registration.category || masterItem.category || 'Standard',
+          unit: masterItem.unit || 'Piece',
+          itemStatus: masterItem.status || 'Active',
+          itemCreatedAt: masterItem.createdAt ? masterItem.createdAt.split('T')[0] : '2026-08-15',
+          revision: registration.revision || 'Rev 01',
+          registeredBy: registration.registeredBy || 'Inspector',
+          registeredById: `EMP-${registration.registeredBy ? registration.registeredBy.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() : 'QA01'}`,
+          registrationDate: registration.registrationDate || new Date().toISOString().split('T')[0],
+          registrationId: registration.id,
+          proofId: `IP-${registration.productCode.replace(/[^a-zA-Z0-9]/g, '')}-${registration.id.slice(-6)}`,
+          supplier: registration.supplier || 'N/A',
+          specification: registration.specification || 'N/A',
+          remarks: registration.remarks || 'None',
+          photosCount: String(registration.photos?.length || 0),
+          photosList: (registration.photos || []).map(p => p.caption || p.fileName).join(', ') || 'None',
+          attachmentsCount: String(registration.attachments?.length || 0),
+          checkedBy: 'JD. Stone (System Admin)',
+          checkedById: 'ADM-001',
+          approvedBy: 'Quality Assurance Director',
+          approvalDate: registration.registrationDate || new Date().toISOString().split('T')[0],
+          inspectorSignature: '___________________________ (Sign & Date)',
+          adminSignature: '___________________________ (Sign & Date)',
+          companyName: config.companyName || 'Precision Industrial Manufacturing Corp.',
+          department: 'Quality Assurance & Materials Engineering',
+          todayDate: new Date().toISOString().split('T')[0],
+          todayDateTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
+          currentYear: String(new Date().getFullYear()),
+          documentTitle: 'MATERIAL REFERENCE & SAMPLE SPECIFICATION FORM',
+          templateName: config.wordTemplateName || 'Uploaded_Template.docx'
+        };
+
+        // Custom fields mapping
+        if (registration.customFields) {
+          Object.entries(registration.customFields).forEach(([k, v]) => {
+            const valStr = typeof v === 'boolean' ? (v ? 'YES' : 'NO') : String(v ?? '');
+            replacements[k] = valStr;
+            replacements[k.toLowerCase()] = valStr;
+          });
+        }
+
+        // XML replacement logic per paragraph node
+        const replacePlaceholdersInXml = (xmlStr: string): string => {
+          let updated = xmlStr;
+          updated = updated.replace(/<w:p(?:\s+[^>]*>|>)([\s\S]*?)<\/w:p>/g, (pMatch) => {
+            const tMatches: string[] = [];
+            pMatch.replace(/<w:t(?:\s+[^>]*>|>)([\s\S]*?)<\/w:t>/g, (_, tContent) => {
+              tMatches.push(tContent);
+              return '';
+            });
+            const fullText = tMatches.join('');
+            if (!fullText.includes('{{')) return pMatch;
+
+            let subText = fullText;
+            Object.entries(replacements).forEach(([key, val]) => {
+              const tagPattern = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
+              const safeVal = (val ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              subText = subText.replace(tagPattern, safeVal);
+            });
+
+            if (subText === fullText) return pMatch;
+
+            let firstReplaced = false;
+            return pMatch.replace(/<w:t(?:\s+[^>]*>|>)([\s\S]*?)<\/w:t>/g, () => {
+              if (!firstReplaced) {
+                firstReplaced = true;
+                return `<w:t xml:space="preserve">${subText}</w:t>`;
+              }
+              return `<w:t xml:space="preserve"></w:t>`;
+            });
+          });
+          return updated;
+        };
+
+        const fileKeys = Object.keys(zip.files).filter(k => 
+          k.startsWith('word/document') || k.startsWith('word/header') || k.startsWith('word/footer')
+        );
+
+        for (const fileKey of fileKeys) {
+          const zipFile = zip.file(fileKey);
+          if (zipFile) {
+            const rawXml = await zipFile.async('text');
+            const processedXml = replacePlaceholdersInXml(rawXml);
+            zip.file(fileKey, processedXml);
+          }
+        }
+
+        const resultBlob = await zip.generateAsync({
+          type: 'blob',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        });
+        return resultBlob;
+      } catch (err) {
+        console.warn('Failed to parse uploaded word template content, falling back to built-in template:', err);
+      }
+    }
+
     const primaryColor = '0F172A'; // Slate 900
     const headerBgColor = 'F1F5F9'; // Slate 100
     const accentColor = '0284C7'; // Sky 600
 
-    const categoryText =
-      masterItem.category === 'RM'
-        ? 'Raw Material (RM)'
-        : 'Production Supply (PS)';
+    const matTypeDisplay = (registration.materialType || masterItem.materialType || (masterItem.category === 'PS' ? 'PS' : 'RM')) === 'PS'
+      ? 'Production Supply (PS)'
+      : 'Raw Material (RM)';
+    const categoryDisplay = registration.category || masterItem.category || 'General';
 
     // Build custom fields & custom placeholder rows
     const customFieldRows: TableRow[] = [];
@@ -260,11 +375,33 @@ export const wordService = {
                     new TableCell({
                       width: { size: 25, type: WidthType.PERCENTAGE },
                       shading: { type: ShadingType.CLEAR, fill: headerBgColor },
+                      children: [new Paragraph({ children: [new TextRun({ text: 'Material Type:', bold: true, size: 20 })] })]
+                    }),
+                    new TableCell({
+                      width: { size: 25, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph({ children: [new TextRun({ text: matTypeDisplay, size: 20 })] })]
+                    })
+                  ]
+                }),
+                new TableRow({
+                  children: [
+                    new TableCell({
+                      width: { size: 25, type: WidthType.PERCENTAGE },
+                      shading: { type: ShadingType.CLEAR, fill: headerBgColor },
                       children: [new Paragraph({ children: [new TextRun({ text: 'Category:', bold: true, size: 20 })] })]
                     }),
                     new TableCell({
                       width: { size: 25, type: WidthType.PERCENTAGE },
-                      children: [new Paragraph({ children: [new TextRun({ text: categoryText, size: 20 })] })]
+                      children: [new Paragraph({ children: [new TextRun({ text: categoryDisplay, size: 20 })] })]
+                    }),
+                    new TableCell({
+                      width: { size: 25, type: WidthType.PERCENTAGE },
+                      shading: { type: ShadingType.CLEAR, fill: headerBgColor },
+                      children: [new Paragraph({ children: [new TextRun({ text: 'Unit:', bold: true, size: 20 })] })]
+                    }),
+                    new TableCell({
+                      width: { size: 25, type: WidthType.PERCENTAGE },
+                      children: [new Paragraph({ children: [new TextRun({ text: masterItem.unit || 'Piece', size: 20 })] })]
                     })
                   ]
                 }),

@@ -94,9 +94,25 @@ export const WordTemplateDocPreview: React.FC<WordTemplateDocPreviewProps> = ({
           isDefault: false,
           fieldLabel: 'Item Description'
         };
+      case 'materialtype': {
+        const matType = registration.materialType || masterItem.materialType || (masterItem.category === 'PS' ? 'PS' : 'RM');
+        return {
+          value: matType === 'PS' ? 'Production Supply (PS)' : 'Raw Material (RM)',
+          isDefault: false,
+          fieldLabel: 'Material Type'
+        };
+      }
+      case 'materialtypecode': {
+        const matType = registration.materialType || masterItem.materialType || (masterItem.category === 'PS' ? 'PS' : 'RM');
+        return {
+          value: matType,
+          isDefault: false,
+          fieldLabel: 'Material Type Code'
+        };
+      }
       case 'category':
         return {
-          value: masterItem.category === 'RM' ? 'Raw Material (RM)' : 'Production Supply (PS)',
+          value: registration.category || masterItem.category || 'Standard',
           isDefault: false,
           fieldLabel: 'Category'
         };
@@ -113,6 +129,12 @@ export const WordTemplateDocPreview: React.FC<WordTemplateDocPreviewProps> = ({
           isDefault: false,
           fieldLabel: 'Status'
         };
+      case 'itemcreatedat':
+        return {
+          value: masterItem.createdAt ? masterItem.createdAt.split('T')[0] : '2026-08-15',
+          isDefault: false,
+          fieldLabel: 'Creation Date'
+        };
       case 'revision':
         return {
           value: registration.revision || 'Rev 01',
@@ -125,17 +147,101 @@ export const WordTemplateDocPreview: React.FC<WordTemplateDocPreviewProps> = ({
           isDefault: false,
           fieldLabel: 'Registered By'
         };
+      case 'registeredbyid':
+        return {
+          value: `EMP-${registration.registeredBy ? registration.registeredBy.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() : 'QA01'}`,
+          isDefault: false,
+          fieldLabel: 'Inspector ID'
+        };
       case 'registrationdate':
         return {
           value: registration.registrationDate || new Date().toISOString().split('T')[0],
           isDefault: false,
           fieldLabel: 'Registration Date'
         };
+      case 'registrationid':
+        return {
+          value: registration.id,
+          isDefault: false,
+          fieldLabel: 'Registration ID'
+        };
+      case 'proofid':
+        return {
+          value: `IP-${registration.productCode.replace(/[^a-zA-Z0-9]/g, '')}-${registration.id.slice(-6)}`,
+          isDefault: false,
+          fieldLabel: 'Proof Slip Voucher Serial'
+        };
       case 'todaydate':
         return {
           value: new Date().toISOString().split('T')[0],
           isDefault: false,
           fieldLabel: 'Export Date'
+        };
+      case 'todaydatetime':
+        return {
+          value: new Date().toISOString().replace('T', ' ').slice(0, 19),
+          isDefault: false,
+          fieldLabel: 'Export Date & Time'
+        };
+      case 'currentyear':
+        return {
+          value: String(new Date().getFullYear()),
+          isDefault: false,
+          fieldLabel: 'Current Year'
+        };
+      case 'documenttitle':
+        return {
+          value: 'MATERIAL REFERENCE & SAMPLE SPECIFICATION FORM',
+          isDefault: false,
+          fieldLabel: 'Document Title'
+        };
+      case 'templatename':
+        return {
+          value: config.wordTemplateName || 'Official_Material_Reference_Template_v2.docx',
+          isDefault: false,
+          fieldLabel: 'Template Name'
+        };
+      case 'department':
+        return {
+          value: 'Quality Assurance & Materials Engineering',
+          isDefault: false,
+          fieldLabel: 'Department'
+        };
+      case 'checkedby':
+        return {
+          value: 'JD. Stone (System Admin)',
+          isDefault: false,
+          fieldLabel: 'Checked By'
+        };
+      case 'checkedbyid':
+        return {
+          value: 'ADM-001',
+          isDefault: false,
+          fieldLabel: 'Admin ID'
+        };
+      case 'approvedby':
+        return {
+          value: 'Quality Assurance Director',
+          isDefault: false,
+          fieldLabel: 'Approved By'
+        };
+      case 'approvaldate':
+        return {
+          value: registration.registrationDate || new Date().toISOString().split('T')[0],
+          isDefault: false,
+          fieldLabel: 'Approval Date'
+        };
+      case 'inspectorsignature':
+        return {
+          value: '___________________________ (Sign & Date)',
+          isDefault: false,
+          fieldLabel: 'Inspector Signature'
+        };
+      case 'adminsignature':
+        return {
+          value: '___________________________ (Sign & Date)',
+          isDefault: false,
+          fieldLabel: 'Admin Signature'
         };
       case 'supplier':
         return {
@@ -166,6 +272,12 @@ export const WordTemplateDocPreview: React.FC<WordTemplateDocPreviewProps> = ({
           value: `${registration.photos?.length || 0} attached sample photos verified in QC archive`,
           isDefault: false,
           fieldLabel: 'Photos List'
+        };
+      case 'attachmentscount':
+        return {
+          value: String(registration.attachments?.length || 0),
+          isDefault: false,
+          fieldLabel: 'Attachments Count'
         };
       default: {
         // Custom fields check
@@ -572,10 +684,10 @@ export const WordTemplateDocPreview: React.FC<WordTemplateDocPreviewProps> = ({
                       {renderField('{{productCode}}')}
                     </td>
                     <td className="py-2 px-3 font-bold text-slate-700 w-1/4 bg-slate-100/70 border-r border-slate-200">
-                      Material Category:
+                      Material Type:
                     </td>
                     <td className="py-2 px-3 w-1/4 font-medium text-slate-800">
-                      {renderField('{{category}}')}
+                      {renderField('{{materialType}}')}
                     </td>
                   </tr>
                   <tr>
@@ -588,10 +700,10 @@ export const WordTemplateDocPreview: React.FC<WordTemplateDocPreviewProps> = ({
                   </tr>
                   <tr className="bg-slate-50/50">
                     <td className="py-2 px-3 font-bold text-slate-700 bg-slate-100/70 border-r border-slate-200">
-                      Item Status:
+                      Category:
                     </td>
-                    <td className="py-2 px-3 border-r border-slate-200 font-semibold text-emerald-700">
-                      {renderField('{{itemStatus}}')}
+                    <td className="py-2 px-3 border-r border-slate-200 font-semibold text-slate-800">
+                      {renderField('{{category}}')}
                     </td>
                     <td className="py-2 px-3 font-bold text-slate-700 bg-slate-100/70 border-r border-slate-200">
                       Reference Unit:

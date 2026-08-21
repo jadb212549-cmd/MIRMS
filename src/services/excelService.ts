@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { MasterItem, ReferenceRegistration, ExcelImportRow, ItemCategory, ItemStatus } from '../types';
+import { MasterItem, ReferenceRegistration, ExcelImportRow, ItemCategory, ItemStatus, MaterialType } from '../types';
 import { db } from './db';
 import { tauriBridge } from './tauriService';
 
@@ -50,7 +50,8 @@ export const excelService = {
 
     const codeHeader = findHeader(['productcode', 'product_code', 'itemcode', 'materialcode', 'code', 'partnumber', 'part_no', 'itemno']);
     const descHeader = findHeader(['description', 'materialdescription', 'itemdescription', 'itemname', 'name', 'details']);
-    const catHeader = findHeader(['category', 'rmps', 'rm_ps', 'type', 'itemtype', 'materialtype', 'group']);
+    const materialTypeHeader = findHeader(['materialtype', 'material_type', 'rmps', 'rm_ps', 'type', 'itemtype']);
+    const catHeader = findHeader(['category', 'itemcategory', 'group', 'class', 'classification']);
     const statusHeader = findHeader(['status', 'activestatus', 'state', 'activeinactive', 'isactive']);
     const unitHeader = findHeader(['unit', 'uom', 'unitofmeasure', 'measure', 'packaging', 'pkg']);
 
@@ -92,20 +93,31 @@ export const excelService = {
         errors.push('Missing Description');
       }
 
-      // 3. Category (RM or PS)
-      let category: ItemCategory = 'RM';
-      const rawCat = catHeader ? String(row[catHeader] || '').trim().toUpperCase() : '';
-      if (rawCat.includes('PS') || rawCat.includes('PRODUCTION') || rawCat.includes('SUPPLY') || rawCat.includes('SUPPLIES')) {
-        category = 'PS';
-      } else if (rawCat.includes('RM') || rawCat.includes('RAW') || rawCat.includes('MATERIAL')) {
-        category = 'RM';
+      // 3. Material Type (RM or PS)
+      let materialType: MaterialType = 'RM';
+      const rawMatType = materialTypeHeader ? String(row[materialTypeHeader] || '').trim().toUpperCase() : '';
+      if (rawMatType.includes('PS') || rawMatType.includes('PRODUCTION') || rawMatType.includes('SUPPLY') || rawMatType.includes('SUPPLIES')) {
+        materialType = 'PS';
+      } else if (rawMatType.includes('RM') || rawMatType.includes('RAW') || rawMatType.includes('MATERIAL')) {
+        materialType = 'RM';
       } else if (rawCode.toUpperCase().startsWith('PS-') || rawCode.toUpperCase().startsWith('PS_')) {
-        category = 'PS';
+        materialType = 'PS';
       } else {
-        category = 'RM'; // Default fallback
+        materialType = 'RM';
       }
 
-      // 4. Status (Active or Inactive)
+      // 4. Dynamic Category (Box, Tape, Corrugated, Sheet Metal, etc.)
+      let category = 'Box';
+      const rawCat = catHeader ? String(row[catHeader] || '').trim() : '';
+      if (rawCat && rawCat.toUpperCase() !== 'RM' && rawCat.toUpperCase() !== 'PS') {
+        category = rawCat;
+      } else if (materialType === 'PS') {
+        category = 'Packaging';
+      } else {
+        category = 'Sheet Metal';
+      }
+
+      // 5. Status (Active or Inactive)
       let status: ItemStatus = 'Active';
       const rawStatus = statusHeader ? String(row[statusHeader] || '').trim().toLowerCase() : '';
       if (rawStatus === 'inactive' || rawStatus === 'i' || rawStatus === '0' || rawStatus === 'false' || rawStatus === 'disabled' || rawStatus === 'n') {
@@ -114,7 +126,7 @@ export const excelService = {
         status = 'Active';
       }
 
-      // 5. Unit (Reference information only)
+      // 6. Unit (Reference information only)
       const rawUnit = unitHeader ? String(row[unitHeader] || '').trim() : String(row['Unit'] || row['UOM'] || '').trim();
 
       const isExisting = rawCode ? existingCodeMap.has(rawCode.toLowerCase()) : false;
@@ -131,9 +143,10 @@ export const excelService = {
         rowNumber: rowNum,
         productCode: rawCode,
         description: rawDesc,
+        materialType,
         category,
         status,
-        unit: rawUnit || (category === 'RM' ? 'Unit' : 'Piece'),
+        unit: rawUnit || (materialType === 'RM' ? 'Unit' : 'Piece'),
         isValid,
         errors,
         isExisting,
@@ -160,28 +173,40 @@ export const excelService = {
       {
         'Product Code': 'RM-SS-304-SHEET',
         'Description': 'Stainless Steel Sheet 304 2B Finish 1.5mm',
-        'Category': 'RM',
+        'Material Type': 'RM',
+        'Category': 'Sheet Metal',
         'Status': 'Active',
         'Unit': 'Sheet'
       },
       {
         'Product Code': 'RM-AL-6061-BAR',
         'Description': 'Aluminum Alloy Bar 6061-T6 50mm Square',
-        'Category': 'RM',
+        'Material Type': 'RM',
+        'Category': 'Bar Stock',
         'Status': 'Active',
         'Unit': 'Length'
       },
       {
-        'Product Code': 'PS-GLOVE-NIT-L',
-        'Description': 'Nitrile Examination Gloves Powder-Free Blue Large',
-        'Category': 'PS',
+        'Product Code': 'PS-BOX-CORR-01',
+        'Description': 'Corrugated Shipping Box Double Wall 12x12x12',
+        'Material Type': 'PS',
+        'Category': 'Box',
         'Status': 'Active',
-        'Unit': 'Box'
+        'Unit': 'Piece'
+      },
+      {
+        'Product Code': 'PS-TAPE-ACRYL-48',
+        'Description': 'Heavy Duty Acrylic Packaging Tape 48mm Clear',
+        'Material Type': 'PS',
+        'Category': 'Tape',
+        'Status': 'Active',
+        'Unit': 'Roll'
       },
       {
         'Product Code': 'PS-OIL-SYN-46',
         'Description': 'Synthetic Industrial Lubricant ISO VG 46',
-        'Category': 'PS',
+        'Material Type': 'PS',
+        'Category': 'Lubricant & Oil',
         'Status': 'Active',
         'Unit': 'Drum'
       }
@@ -192,7 +217,8 @@ export const excelService = {
     worksheet['!cols'] = [
       { wch: 22 }, // Product Code
       { wch: 45 }, // Description
-      { wch: 14 }, // Category
+      { wch: 16 }, // Material Type
+      { wch: 20 }, // Category
       { wch: 14 }, // Status
       { wch: 14 }  // Unit
     ];
@@ -212,7 +238,8 @@ export const excelService = {
     const exportRows = items.map((item) => ({
       'Product Code': item.productCode,
       'Description': item.description,
-      'Category (RM/PS)': item.category === 'RM' ? 'RM (Raw Material)' : 'PS (Production Supply)',
+      'Material Type': item.materialType === 'RM' ? 'Raw Material (RM)' : 'Production Supply (PS)',
+      'Category': item.category || (item.materialType === 'RM' ? 'Sheet Metal' : 'Packaging'),
       'Status': item.status,
       'Unit (Ref)': item.unit || '-',
       'Created Date': item.createdAt ? item.createdAt.split('T')[0] : '-',
@@ -223,7 +250,8 @@ export const excelService = {
     worksheet['!cols'] = [
       { wch: 24 },
       { wch: 55 },
-      { wch: 24 },
+      { wch: 26 },
+      { wch: 22 },
       { wch: 14 },
       { wch: 16 },
       { wch: 16 },

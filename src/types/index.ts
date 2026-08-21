@@ -1,4 +1,5 @@
-export type ItemCategory = 'RM' | 'PS'; // RM = Raw Material, PS = Production Supply
+export type MaterialType = 'RM' | 'PS'; // RM = Raw Material, PS = Production Supply
+export type ItemCategory = string; // e.g. 'Box', 'Tape', 'Packaging', etc.
 export type ItemStatus = 'Active' | 'Inactive';
 
 export type PhotoCategory =
@@ -20,7 +21,8 @@ export interface MasterItem {
   id: string;
   productCode: string;
   description: string;
-  category: ItemCategory;
+  materialType: MaterialType;
+  category: string; // Dynamic category e.g. Box, Tape, Packaging, Corrugated, etc.
   status: ItemStatus;
   unit?: string;
   createdAt: string;
@@ -55,7 +57,8 @@ export interface CustomFieldDefinition {
   key: string;
   type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'boolean';
   options?: string[]; // for select
-  categoryApplicability?: 'ALL' | 'RM' | 'PS';
+  categoryApplicability?: 'ALL' | 'RM' | 'PS' | string;
+  materialTypeApplicability?: 'ALL' | 'RM' | 'PS';
   required?: boolean;
   defaultValue?: string;
 }
@@ -81,6 +84,8 @@ export interface ReferenceRegistration {
   id: string;
   masterItemId: string;
   productCode: string; // duplicate link & quick query
+  materialType?: MaterialType; // RM or PS
+  category?: string; // Category e.g. Box, Tape, etc.
   registrationDate: string;
   registeredBy: string;
   supplier?: string;
@@ -146,7 +151,7 @@ export interface WordDocPlaceholder {
   tag: string; // e.g. "{{lotNumber}}"
   label?: string; // Human-readable label e.g. "Lot / Batch Number"
   desc: string; // Description / intended purpose
-  category?: 'System' | 'Master' | 'Registration' | 'CustomField' | 'Custom' | 'QC Inspection' | 'Compliance' | 'Packaging';
+  category?: 'System' | 'Master' | 'Registration' | 'Sign-off' | 'CustomField' | 'Custom' | 'QC Inspection' | 'Compliance' | 'Packaging';
   defaultValue?: string;
   sampleValue?: string;
   isSystem?: boolean;
@@ -161,6 +166,7 @@ export interface AppConfig {
   defaultRegisteredBy: string;
   companyName: string;
   workstationName?: string;
+  categories?: string[]; // Custom and predefined categories list
   customFields: CustomFieldDefinition[];
   wordTemplateName: string;
   wordTemplateContent?: string; // base64 encoded template
@@ -186,7 +192,8 @@ export interface ExcelImportRow {
   rowNumber: number;
   productCode: string;
   description: string;
-  category: ItemCategory;
+  materialType: MaterialType; // RM or PS
+  category: string; // e.g. Box, Tape, etc.
   status: ItemStatus;
   unit: string;
   isValid: boolean;
@@ -201,6 +208,7 @@ export interface DashboardStats {
   inactiveItems: number;
   rmItems: number;
   psItems: number;
+  categoriesCount: number;
   registeredCount: number;
   unregisteredCount: number;
   registrationPercentage: number;
@@ -212,6 +220,7 @@ export type NavigationTab =
   | 'DASHBOARD'
   | 'MASTER_ITEMS'
   | 'REGISTRATIONS'
+  | 'ADMIN_DASHBOARD'
   | 'EXCEL_MANAGER'
   | 'WORD_TEMPLATES'
   | 'DATA_MANAGEMENT'

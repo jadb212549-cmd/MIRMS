@@ -1,6 +1,27 @@
 import { MasterItem, ReferenceRegistration, CustomFieldDefinition, AuditLogEntry, AppConfig, WordDocPlaceholder } from '../types';
 
+export const DEFAULT_CATEGORIES: string[] = [
+  'Box',
+  'Tape',
+  'Corrugated',
+  'Packaging',
+  'Label',
+  'Sheet Metal',
+  'Bar Stock',
+  'Resin & Polymer',
+  'Rubber & Gasket',
+  'Adhesive',
+  'Chemical & Solvent',
+  'Abrasive',
+  'Hardware & Fastener',
+  'Gloves & PPE',
+  'Lubricant & Oil',
+  'Film & Foil',
+  'Other'
+];
+
 export const DEFAULT_WORD_PLACEHOLDERS: WordDocPlaceholder[] = [
+  // --- MASTER ITEM DATA PLACEHOLDERS ---
   {
     id: 'ph_product_code',
     tag: '{{productCode}}',
@@ -20,23 +41,61 @@ export const DEFAULT_WORD_PLACEHOLDERS: WordDocPlaceholder[] = [
     isSystem: true
   },
   {
-    id: 'ph_category',
-    tag: '{{category}}',
-    label: 'Category Designation',
-    desc: 'Material category: Raw Material (RM) or Production Supply (PS)',
+    id: 'ph_material_type',
+    tag: '{{materialType}}',
+    label: 'Material Type',
+    desc: 'Classification: Raw Material (RM) or Production Supply (PS)',
     category: 'Master',
     sampleValue: 'Raw Material (RM)',
+    isSystem: true
+  },
+  {
+    id: 'ph_material_type_code',
+    tag: '{{materialTypeCode}}',
+    label: 'Material Type Code',
+    desc: 'Short code for classification: RM or PS',
+    category: 'Master',
+    sampleValue: 'RM',
+    isSystem: true
+  },
+  {
+    id: 'ph_category',
+    tag: '{{category}}',
+    label: 'Item Category',
+    desc: 'Item category classification (e.g. Box, Tape, Packaging, Sheet Metal)',
+    category: 'Master',
+    sampleValue: 'Sheet Metal',
     isSystem: true
   },
   {
     id: 'ph_unit',
     tag: '{{unit}}',
     label: 'Reference Unit',
-    desc: 'Standard stocking or reference unit (e.g. Sheet, Roll, Drum)',
+    desc: 'Standard stocking or reference unit (e.g. Sheet, Roll, Drum, Piece)',
     category: 'Master',
     sampleValue: 'Sheet',
     isSystem: true
   },
+  {
+    id: 'ph_item_status',
+    tag: '{{itemStatus}}',
+    label: 'Master Item Status',
+    desc: 'Master item lifecycle state (Active / Inactive)',
+    category: 'Master',
+    sampleValue: 'Active',
+    isSystem: true
+  },
+  {
+    id: 'ph_item_created_at',
+    tag: '{{itemCreatedAt}}',
+    label: 'Item Creation Date',
+    desc: 'Timestamp when the master item was first added',
+    category: 'Master',
+    sampleValue: '2026-08-15',
+    isSystem: true
+  },
+
+  // --- SAMPLE REGISTRATION & QA INSPECTION ---
   {
     id: 'ph_revision',
     tag: '{{revision}}',
@@ -53,6 +112,15 @@ export const DEFAULT_WORD_PLACEHOLDERS: WordDocPlaceholder[] = [
     desc: 'Authorized QA Inspector / Person who entered the sample',
     category: 'Registration',
     sampleValue: 'Juan Dela Cruz',
+    isSystem: true
+  },
+  {
+    id: 'ph_registered_by_id',
+    tag: '{{registeredById}}',
+    label: 'Inspector ID Number',
+    desc: 'Operator / Inspector employee identification number',
+    category: 'Registration',
+    sampleValue: 'EMP-QA-084',
     isSystem: true
   },
   {
@@ -92,21 +160,21 @@ export const DEFAULT_WORD_PLACEHOLDERS: WordDocPlaceholder[] = [
     isSystem: true
   },
   {
-    id: 'ph_company_name',
-    tag: '{{companyName}}',
-    label: 'Organization Name',
-    desc: 'Header company name configured in application settings',
-    category: 'System',
-    sampleValue: 'Precision Industrial Manufacturing Corp.',
+    id: 'ph_registration_id',
+    tag: '{{registrationId}}',
+    label: 'Registration Record ID',
+    desc: 'Internal unique reference sample ID',
+    category: 'Registration',
+    sampleValue: 'reg-001-ss304',
     isSystem: true
   },
   {
-    id: 'ph_today_date',
-    tag: '{{todayDate}}',
-    label: 'Current Export Date',
-    desc: 'Automatic generation date of the Word document',
-    category: 'System',
-    sampleValue: '2026-08-20',
+    id: 'ph_proof_id',
+    tag: '{{proofId}}',
+    label: 'Proof Slip Voucher Serial',
+    desc: 'Serial voucher identifier for inspection verification slip',
+    category: 'Registration',
+    sampleValue: 'IP-RMSS304001-839201',
     isSystem: true
   },
   {
@@ -128,12 +196,198 @@ export const DEFAULT_WORD_PLACEHOLDERS: WordDocPlaceholder[] = [
     isSystem: true
   },
   {
+    id: 'ph_attachments_count',
+    tag: '{{attachmentsCount}}',
+    label: 'Attachments Count',
+    desc: 'Number of technical drawings / certificates attached',
+    category: 'Registration',
+    sampleValue: '2',
+    isSystem: true
+  },
+
+  // --- SIGN-OFF & VERIFICATION AUTHORITY ---
+  {
+    id: 'ph_checked_by',
+    tag: '{{checkedBy}}',
+    label: 'Checked By (Admin)',
+    desc: 'Name of Administrator authority who checked and verified the sample',
+    category: 'Sign-off',
+    sampleValue: 'JD. Stone (System Admin)',
+    isSystem: true
+  },
+  {
+    id: 'ph_checked_by_id',
+    tag: '{{checkedById}}',
+    label: 'Admin ID Number',
+    desc: 'Employee ID number of checking Administrator',
+    category: 'Sign-off',
+    sampleValue: 'ADM-001',
+    isSystem: true
+  },
+  {
+    id: 'ph_approved_by',
+    tag: '{{approvedBy}}',
+    label: 'Approved By (QA Head)',
+    desc: 'QA Department Head or Engineering Manager sign-off',
+    category: 'Sign-off',
+    sampleValue: 'Quality Assurance Director',
+    isSystem: true
+  },
+  {
+    id: 'ph_approval_date',
+    tag: '{{approvalDate}}',
+    label: 'Approval Date',
+    desc: 'Date of final managerial sign-off and standard authorization',
+    category: 'Sign-off',
+    sampleValue: '2026-08-16',
+    isSystem: true
+  },
+  {
+    id: 'ph_inspector_sig',
+    tag: '{{inspectorSignature}}',
+    label: 'Inspector Signature Line',
+    desc: 'Sign-off line for QA Registering Inspector',
+    category: 'Sign-off',
+    sampleValue: '___________________________ (Sign & Date)',
+    isSystem: true
+  },
+  {
+    id: 'ph_admin_sig',
+    tag: '{{adminSignature}}',
+    label: 'Admin Sign-off Line',
+    desc: 'Sign-off line for Authorizing Administrator',
+    category: 'Sign-off',
+    sampleValue: '___________________________ (Sign & Date)',
+    isSystem: true
+  },
+
+  // --- SYSTEM & ORGANIZATIONAL METADATA ---
+  {
+    id: 'ph_company_name',
+    tag: '{{companyName}}',
+    label: 'Organization / Company Name',
+    desc: 'Header company name configured in application settings',
+    category: 'System',
+    sampleValue: 'Precision Industrial Manufacturing Corp.',
+    isSystem: true
+  },
+  {
+    id: 'ph_department',
+    tag: '{{department}}',
+    label: 'QA / Inspection Department',
+    desc: 'Quality Assurance & Incoming Material Control Department',
+    category: 'System',
+    sampleValue: 'Quality Assurance & Materials Engineering',
+    isSystem: true
+  },
+  {
+    id: 'ph_today_date',
+    tag: '{{todayDate}}',
+    label: 'Current Export Date (YYYY-MM-DD)',
+    desc: 'Automatic generation date of the Word document',
+    category: 'System',
+    sampleValue: '2026-08-21',
+    isSystem: true
+  },
+  {
+    id: 'ph_today_datetime',
+    tag: '{{todayDateTime}}',
+    label: 'Current Export Date & Time',
+    desc: 'Full timestamp with hour, minute, and second of document export',
+    category: 'System',
+    sampleValue: '2026-08-21 14:30:00',
+    isSystem: true
+  },
+  {
+    id: 'ph_current_year',
+    tag: '{{currentYear}}',
+    label: 'Current Year (YYYY)',
+    desc: '4-digit current year for headers/footers',
+    category: 'System',
+    sampleValue: '2026',
+    isSystem: true
+  },
+  {
+    id: 'ph_document_title',
+    tag: '{{documentTitle}}',
+    label: 'Official Document Title',
+    desc: 'Configured title for the formal reference specification sheet',
+    category: 'System',
+    sampleValue: 'MATERIAL REFERENCE & SAMPLE SPECIFICATION FORM',
+    isSystem: true
+  },
+  {
+    id: 'ph_template_name',
+    tag: '{{templateName}}',
+    label: 'Template File Name',
+    desc: 'Active Word document template filename',
+    category: 'System',
+    sampleValue: 'Official_Material_Reference_Template_v2.docx',
+    isSystem: true
+  },
+
+  // --- CUSTOM ATTRIBUTES & FIELD PLACEHOLDERS ---
+  {
     id: 'ph_storage_loc',
     tag: '{{storageLocation}}',
-    label: 'Sample Location',
+    label: 'Sample Bin / Shelf Location',
     desc: 'Physical storage bin, rack, or cabinet location',
     category: 'CustomField',
     sampleValue: 'Shelf A-01',
+    isSystem: false
+  },
+  {
+    id: 'ph_country_origin',
+    tag: '{{countryOfOrigin}}',
+    label: 'Country of Origin',
+    desc: 'Manufacturing country or origin region',
+    category: 'CustomField',
+    sampleValue: 'Philippines',
+    isSystem: false
+  },
+  {
+    id: 'ph_is_hazardous',
+    tag: '{{isHazardous}}',
+    label: 'Hazardous Material Status',
+    desc: 'Indicates if material requires hazardous handling (YES / NO)',
+    category: 'CustomField',
+    sampleValue: 'NO',
+    isSystem: false
+  },
+  {
+    id: 'ph_shelf_life',
+    tag: '{{shelfLifeMonths}}',
+    label: 'Shelf Life (Months)',
+    desc: 'Sample validity / shelf life duration in months',
+    category: 'CustomField',
+    sampleValue: '24 Months',
+    isSystem: false
+  },
+  {
+    id: 'ph_lot_number',
+    tag: '{{lotNumber}}',
+    label: 'Lot / Batch Number',
+    desc: 'Manufacturing batch, heat number, or lot identification',
+    category: 'CustomField',
+    sampleValue: 'LOT-2026-B849',
+    isSystem: false
+  },
+  {
+    id: 'ph_color_std',
+    tag: '{{colorStandard}}',
+    label: 'Color Standard / Visual Spec',
+    desc: 'Color matching standard, Pantone, or RAL code',
+    category: 'CustomField',
+    sampleValue: 'Natural Matte / Semi-gloss',
+    isSystem: false
+  },
+  {
+    id: 'ph_material_grade',
+    tag: '{{materialGrade}}',
+    label: 'Chemical / Material Grade',
+    desc: 'Specific metallurgical or polymer grade designation',
+    category: 'CustomField',
+    sampleValue: 'AISI 304 / UNS S30400',
     isSystem: false
   }
 ];
@@ -145,6 +399,7 @@ export const DEFAULT_CUSTOM_FIELDS: CustomFieldDefinition[] = [
     label: 'Sample Bin / Shelf Location',
     type: 'text',
     categoryApplicability: 'ALL',
+    materialTypeApplicability: 'ALL',
     required: false,
     defaultValue: 'Shelf A-01'
   },
@@ -154,6 +409,7 @@ export const DEFAULT_CUSTOM_FIELDS: CustomFieldDefinition[] = [
     label: 'Country of Origin',
     type: 'text',
     categoryApplicability: 'ALL',
+    materialTypeApplicability: 'ALL',
     required: false,
     defaultValue: 'Philippines'
   },
@@ -163,6 +419,7 @@ export const DEFAULT_CUSTOM_FIELDS: CustomFieldDefinition[] = [
     label: 'Hazardous / Controlled Material',
     type: 'boolean',
     categoryApplicability: 'RM',
+    materialTypeApplicability: 'RM',
     required: false,
     defaultValue: 'false'
   },
@@ -172,6 +429,7 @@ export const DEFAULT_CUSTOM_FIELDS: CustomFieldDefinition[] = [
     label: 'Shelf Life (Months)',
     type: 'number',
     categoryApplicability: 'ALL',
+    materialTypeApplicability: 'ALL',
     required: false,
     defaultValue: '24'
   }
@@ -181,7 +439,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   appName: 'Material Reference & Sample Tracking System',
   companyName: 'Precision Industrial Manufacturing Corp.',
   dataDirectory: 'Application Data/ReferenceTracker_Data/',
-  defaultRegisteredBy: 'Juan Dela Cruz',
+  defaultRegisteredBy: 'JD. Stone',
+  categories: DEFAULT_CATEGORIES,
   customFields: DEFAULT_CUSTOM_FIELDS,
   wordTemplateName: 'Official_Material_Reference_Template_v2.docx',
   wordDocPlaceholders: DEFAULT_WORD_PLACEHOLDERS,
@@ -193,7 +452,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-001',
     productCode: 'RM-SS-304-001',
     description: 'Stainless Steel Sheet 304 Grade 2B Finish 1.5mm x 1219mm x 2438mm',
-    category: 'RM',
+    materialType: 'RM',
+    category: 'Sheet Metal',
     status: 'Active',
     unit: 'Sheet',
     createdAt: '2026-08-15T08:00:00.000Z',
@@ -203,7 +463,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-002',
     productCode: 'RM-AL-6061-T6',
     description: 'Aluminum Extrusion Bar 6061-T6 50mm x 50mm Square Hollow',
-    category: 'RM',
+    materialType: 'RM',
+    category: 'Bar Stock',
     status: 'Active',
     unit: 'Length',
     createdAt: '2026-08-15T08:30:00.000Z',
@@ -213,7 +474,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-003',
     productCode: 'RM-POLY-HDPE-NAT',
     description: 'High-Density Polyethylene Resin Pellets Natural Grade Injection Molding',
-    category: 'RM',
+    materialType: 'RM',
+    category: 'Resin & Polymer',
     status: 'Active',
     unit: 'Bag (25kg)',
     createdAt: '2026-08-16T09:15:00.000Z',
@@ -223,7 +485,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-004',
     productCode: 'RM-RUB-EPDM-70',
     description: 'EPDM Rubber Gasket Sheet 70 Shore A Black 3.0mm Thickness',
-    category: 'RM',
+    materialType: 'RM',
+    category: 'Rubber & Gasket',
     status: 'Active',
     unit: 'Roll',
     createdAt: '2026-08-16T10:00:00.000Z',
@@ -233,7 +496,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-005',
     productCode: 'RM-COP-C1100-ROD',
     description: 'Electrolytic Tough Pitch Copper Round Rod Dia 25mm x 3000mm',
-    category: 'RM',
+    materialType: 'RM',
+    category: 'Bar Stock',
     status: 'Inactive',
     unit: 'Piece',
     createdAt: '2026-08-17T11:00:00.000Z',
@@ -243,7 +507,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-006',
     productCode: 'PS-NIT-GLOVE-L',
     description: 'Nitrile Examination Gloves Powder-Free Blue Large Box of 100',
-    category: 'PS',
+    materialType: 'PS',
+    category: 'Gloves & PPE',
     status: 'Active',
     unit: 'Box',
     createdAt: '2026-08-17T13:30:00.000Z',
@@ -253,7 +518,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-007',
     productCode: 'PS-LUB-SYN-VG46',
     description: 'Fully Synthetic Hydraulic Oil ISO VG 46 High Thermal Stability Drum',
-    category: 'PS',
+    materialType: 'PS',
+    category: 'Lubricant & Oil',
     status: 'Active',
     unit: 'Drum (208L)',
     createdAt: '2026-08-18T14:00:00.000Z',
@@ -263,7 +529,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-008',
     productCode: 'PS-TAPE-KAPT-25',
     description: 'High-Temperature Polyimide Kapton Tape 25mm Width x 33m Length',
-    category: 'PS',
+    materialType: 'PS',
+    category: 'Tape',
     status: 'Active',
     unit: 'Roll',
     createdAt: '2026-08-18T15:20:00.000Z',
@@ -273,7 +540,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-009',
     productCode: 'PS-SAND-GRIT-320',
     description: 'Silicon Carbide Waterproof Sandpaper Sheet 230mm x 280mm Grit 320',
-    category: 'PS',
+    materialType: 'PS',
+    category: 'Abrasive',
     status: 'Active',
     unit: 'Pack (50)',
     createdAt: '2026-08-19T08:45:00.000Z',
@@ -283,7 +551,8 @@ export const INITIAL_MASTER_ITEMS: MasterItem[] = [
     id: 'item-010',
     productCode: 'PS-SOLV-IPA-99',
     description: 'High Purity Isopropyl Alcohol 99.9% Electronic Grade Gallon',
-    category: 'PS',
+    materialType: 'PS',
+    category: 'Chemical & Solvent',
     status: 'Inactive',
     unit: 'Gallon',
     createdAt: '2026-08-19T10:00:00.000Z',
@@ -296,6 +565,8 @@ export const INITIAL_REGISTRATIONS: ReferenceRegistration[] = [
     id: 'ref-001',
     masterItemId: 'item-001',
     productCode: 'RM-SS-304-001',
+    materialType: 'RM',
+    category: 'Sheet Metal',
     registrationDate: '2026-08-20',
     registeredBy: 'Juan Dela Cruz',
     supplier: 'Apex Metal Alloys Inc.',
@@ -336,6 +607,8 @@ export const INITIAL_REGISTRATIONS: ReferenceRegistration[] = [
     id: 'ref-002',
     masterItemId: 'item-003',
     productCode: 'RM-POLY-HDPE-NAT',
+    materialType: 'RM',
+    category: 'Resin & Polymer',
     registrationDate: '2026-08-19',
     registeredBy: 'Maria Santos',
     supplier: 'Petrochem Global Solutions',
@@ -375,6 +648,8 @@ export const INITIAL_REGISTRATIONS: ReferenceRegistration[] = [
     id: 'ref-003',
     masterItemId: 'item-006',
     productCode: 'PS-NIT-GLOVE-L',
+    materialType: 'PS',
+    category: 'Gloves & PPE',
     registrationDate: '2026-08-18',
     registeredBy: 'Juan Dela Cruz',
     supplier: 'SafetyPro Supplies Ltd.',

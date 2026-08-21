@@ -1,5 +1,5 @@
 import { MasterItem, ReferenceRegistration, AuditLogEntry, AppConfig, CustomFieldDefinition, SyncMessage } from '../types';
-import { INITIAL_MASTER_ITEMS, INITIAL_REGISTRATIONS, INITIAL_AUDIT_LOGS, DEFAULT_CONFIG, DEFAULT_CUSTOM_FIELDS } from './defaultData';
+import { INITIAL_MASTER_ITEMS, INITIAL_REGISTRATIONS, INITIAL_AUDIT_LOGS, DEFAULT_CONFIG, DEFAULT_CUSTOM_FIELDS, DEFAULT_CATEGORIES } from './defaultData';
 import { isTauri } from './tauriService';
 import { realtimeSync } from './realtimeSync';
 import JSZip from 'jszip';
@@ -105,14 +105,26 @@ class DatabaseService {
       const storedConfig = localStorage.getItem(STORAGE_KEYS.APP_CONFIG);
 
       if (storedItems) {
-        this.masterItems = JSON.parse(storedItems);
+        const parsed = JSON.parse(storedItems);
+        this.masterItems = parsed.map((item: any) => ({
+          ...item,
+          materialType: item.materialType || (item.category === 'RM' || item.category === 'PS' ? item.category : 'RM'),
+          category: (item.category && item.category !== 'RM' && item.category !== 'PS')
+            ? item.category
+            : (item.materialType === 'PS' ? 'Tape' : 'Box')
+        }));
       } else {
         this.masterItems = [...INITIAL_MASTER_ITEMS];
         this.saveMasterItems();
       }
 
       if (storedRefs) {
-        this.registrations = JSON.parse(storedRefs);
+        const parsed = JSON.parse(storedRefs);
+        this.registrations = parsed.map((r: any) => ({
+          ...r,
+          materialType: r.materialType || (r.category === 'RM' || r.category === 'PS' ? r.category : undefined),
+          category: (r.category && r.category !== 'RM' && r.category !== 'PS') ? r.category : undefined
+        }));
       } else {
         this.registrations = [...INITIAL_REGISTRATIONS];
         this.saveRegistrations();
@@ -126,7 +138,14 @@ class DatabaseService {
       }
 
       if (storedConfig) {
-        this.config = { ...DEFAULT_CONFIG, ...JSON.parse(storedConfig) };
+        const parsedConfig = JSON.parse(storedConfig);
+        this.config = {
+          ...DEFAULT_CONFIG,
+          ...parsedConfig,
+          categories: Array.isArray(parsedConfig.categories) && parsedConfig.categories.length > 0
+            ? parsedConfig.categories
+            : DEFAULT_CATEGORIES
+        };
       } else {
         this.config = { ...DEFAULT_CONFIG };
         this.saveLocalConfig();
@@ -141,6 +160,43 @@ class DatabaseService {
 
     this.initialized = true;
     this.notifyListeners();
+  }
+
+  // Categories Management
+  public async getCategories(): Promise<string[]> {
+    await this.init();
+    const configCats = this.config.categories || DEFAULT_CATEGORIES;
+    const itemCats = this.masterItems.map(m => m.category).filter(Boolean);
+    const regCats = this.registrations.map(r => r.category).filter(Boolean) as string[];
+    const combined = Array.from(new Set([...configCats, ...itemCats, ...regCats].map(c => c.trim()).filter(Boolean)));
+    return combined.sort((a, b) => a.localeCompare(b));
+  }
+
+  public async addCategory(name: string): Promise<{ success: boolean; categories: string[]; error?: string }> {
+    await this.init();
+    const clean = name.trim();
+    if (!clean) {
+      return { success: false, categories: await this.getCategories(), error: 'Category name cannot be empty.' };
+    }
+    const currentCats = this.config.categories || [...DEFAULT_CATEGORIES];
+    if (!currentCats.some(c => c.toLowerCase() === clean.toLowerCase())) {
+      const updated = [...currentCats, clean];
+      this.config = { ...this.config, categories: updated };
+      this.saveLocalConfig();
+      this.notifyListeners();
+    }
+    return { success: true, categories: await this.getCategories() };
+  }
+
+  public async deleteCategory(name: string): Promise<{ success: boolean; categories: string[] }> {
+    await this.init();
+    const clean = name.trim();
+    const currentCats = this.config.categories || [...DEFAULT_CATEGORIES];
+    const updated = currentCats.filter(c => c.toLowerCase() !== clean.toLowerCase());
+    this.config = { ...this.config, categories: updated };
+    this.saveLocalConfig();
+    this.notifyListeners();
+    return { success: true, categories: await this.getCategories() };
   }
 
   // Master Items Management
@@ -178,12 +234,18 @@ class DatabaseService {
       return { success: false, error: `Product Code "${normalizedCode}" already exists in Master Items.` };
     }
 
+    // Auto-register category if not present
+    if (itemData.category && itemData.category.trim()) {
+      await this.addCategory(itemData.category.trim());
+    }
+
     const now = new Date().toISOString();
     const newItem: MasterItem = {
       id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       productCode: normalizedCode,
       description: itemData.description.trim(),
-      category: itemData.category,
+      materialType: itemData.materialType || 'RM',
+      category: itemData.category?.trim() || 'Box',
       status: itemData.status,
       unit: itemData.unit?.trim() || undefined,
       createdAt: now,
@@ -199,7 +261,7 @@ class DatabaseService {
       entityType: 'MASTER_ITEM',
       entityId: newItem.id,
       entityIdentifier: newItem.productCode,
-      details: `Created master item "${newItem.productCode}" (${newItem.category}, ${newItem.status})`
+      details: `Created master item "${newItem.productCode}" (${newItem.materialType}, Cat: ${newItem.category}, ${newItem.status})`
     });
 
     if (isTauri()) {
@@ -246,11 +308,18 @@ class DatabaseService {
       this.saveRegistrations();
     }
 
+    // Auto-register category if not present
+    if (updates.category && updates.category.trim()) {
+      await this.addCategory(updates.category.trim());
+    }
+
     const updated: MasterItem = {
       ...current,
       ...updates,
       productCode: updates.productCode ? updates.productCode.trim() : current.productCode,
       description: updates.description !== undefined ? updates.description.trim() : current.description,
+      materialType: updates.materialType !== undefined ? updates.materialType : current.materialType,
+      category: updates.category !== undefined ? updates.category.trim() : current.category,
       unit: updates.unit !== undefined ? updates.unit.trim() : current.unit,
       updatedAt: new Date().toISOString()
     };
@@ -333,16 +402,25 @@ class DatabaseService {
       const code = row.productCode.trim();
       if (!code) continue;
 
+      const rawMatType = (row as any).materialType || ((row.category === 'RM' || row.category === 'PS') ? row.category : 'RM');
+      const rawCat = (row.category && row.category !== 'RM' && row.category !== 'PS') 
+        ? row.category.trim() 
+        : ((row as any).category || (rawMatType === 'PS' ? 'Tape' : 'Box'));
+
+      if (rawCat) {
+        await this.addCategory(rawCat);
+      }
+
       const existingIndex = this.masterItems.findIndex(
         (m) => m.productCode.toLowerCase() === code.toLowerCase()
       );
 
       if (existingIndex >= 0) {
-        // Update master item attributes without breaking existing references
         this.masterItems[existingIndex] = {
           ...this.masterItems[existingIndex],
           description: row.description.trim(),
-          category: row.category,
+          materialType: rawMatType,
+          category: rawCat,
           status: row.status,
           unit: row.unit?.trim() || undefined,
           updatedAt: now
@@ -353,7 +431,8 @@ class DatabaseService {
           id: `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           productCode: code,
           description: row.description.trim(),
-          category: row.category,
+          materialType: rawMatType,
+          category: rawCat,
           status: row.status,
           unit: row.unit?.trim() || undefined,
           createdAt: now,
@@ -407,24 +486,39 @@ class DatabaseService {
     await this.init();
     const normalizedCode = regData.productCode.trim();
 
-    // Verify master item exists
-    const masterItem = await this.getMasterItemByCode(normalizedCode);
+    // Verify master item exists or auto-create it
+    let masterItem = await this.getMasterItemByCode(normalizedCode);
     if (!masterItem) {
-      return {
-        success: false,
-        error: `Master item with Product Code "${normalizedCode}" does not exist in master list.`
-      };
+      const createRes = await this.createMasterItem({
+        productCode: normalizedCode,
+        description: regData.specification || `Reference Item ${normalizedCode}`,
+        materialType: regData.materialType || 'RM',
+        category: regData.category || 'Box',
+        unit: 'Piece',
+        status: 'Active'
+      }, author || regData.registeredBy || 'System');
+
+      if (createRes.success && createRes.item) {
+        masterItem = createRes.item;
+      } else {
+        return {
+          success: false,
+          error: createRes.error || `Master item for Product Code "${normalizedCode}" could not be created.`
+        };
+      }
     }
 
-    // Duplicate Check: Requirement 5: Primary duplicate identifier is Product Code. Duplicate registrations must be blocked!
+    // Duplicate Check: if duplicate exists, route to update the existing registration
     const duplicate = this.registrations.find(
       (r) => r.productCode.toLowerCase() === normalizedCode.toLowerCase()
     );
     if (duplicate) {
-      return {
-        success: false,
-        error: `Duplicate Registration Blocked: Product Code "${normalizedCode}" is already registered (Registration Date: ${duplicate.registrationDate}, By: ${duplicate.registeredBy}, Revision: ${duplicate.revision}). Please edit the existing registration or update its revision.`
-      };
+      return this.updateRegistration(duplicate.id, regData, author);
+    }
+
+    const regCategory = regData.category?.trim() || masterItem.category;
+    if (regCategory) {
+      await this.addCategory(regCategory);
     }
 
     const now = new Date().toISOString();
@@ -432,6 +526,8 @@ class DatabaseService {
       id: `ref-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       masterItemId: masterItem.id,
       productCode: masterItem.productCode,
+      materialType: regData.materialType || masterItem.materialType,
+      category: regCategory,
       registrationDate: regData.registrationDate || now.split('T')[0],
       registeredBy: regData.registeredBy.trim() || author || this.config.defaultRegisteredBy,
       supplier: regData.supplier?.trim() || undefined,
@@ -520,6 +616,10 @@ class DatabaseService {
       if (!revisionHistory.some((r) => r.revision === snapshot.revision && r.date === snapshot.date)) {
         revisionHistory.unshift(snapshot);
       }
+    }
+
+    if (updates.category && updates.category.trim()) {
+      await this.addCategory(updates.category.trim());
     }
 
     const updated: ReferenceRegistration = {

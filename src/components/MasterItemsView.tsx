@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { MasterItem, ReferenceRegistration, ItemCategory, ItemStatus } from '../types';
-import { Database, Plus, Search, Filter, FileSpreadsheet, ShieldCheck, Edit3, Trash2, ShieldAlert, Calendar, X, Tag, Clock, Check, ChevronDown, Sparkles, RefreshCw, Camera } from 'lucide-react';
+import { Database, Plus, Search, Filter, FileSpreadsheet, ShieldCheck, Edit3, Trash2, ShieldAlert, Calendar, X, Tag, Clock, Check, ChevronDown, Sparkles, RefreshCw, Camera, User } from 'lucide-react';
 import { excelService } from '../services/excelService';
 
 interface MasterItemsViewProps {
@@ -43,10 +43,32 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
   // Specific Name / Description Filter
   const [nameFilter, setNameFilter] = useState('');
 
-  // Category, Status, Sample Registration filters
-  const [categoryFilter, setCategoryFilter] = useState<'ALL' | ItemCategory>('ALL');
+  // Distinct item names for quick auto-complete filter selection
+  const distinctItemNames = useMemo(() => {
+    const names = Array.from(new Set(masterItems.map((m) => m.description).filter(Boolean))) as string[];
+    return names.sort((a, b) => a.localeCompare(b));
+  }, [masterItems]);
+
+  // Registered By / Personnel Filter
+  const [registeredByFilter, setRegisteredByFilter] = useState<string>('ALL');
+
+  // Distinct registeredBy operators from registrations
+  const distinctRegisteredByList = useMemo(() => {
+    const list = Array.from(new Set(registrations.map((r) => r.registeredBy).filter(Boolean))) as string[];
+    return list.sort((a, b) => a.localeCompare(b));
+  }, [registrations]);
+
+  // Material Type, Dynamic Category, Status, Sample Registration filters
+  const [materialTypeFilter, setMaterialTypeFilter] = useState<'ALL' | 'RM' | 'PS'>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | ItemStatus>('ALL');
   const [regFilter, setRegFilter] = useState<'ALL' | 'REGISTERED' | 'UNREGISTERED'>('ALL');
+
+  // Distinct categories in master items
+  const distinctCategories = useMemo(() => {
+    const cats = Array.from(new Set(masterItems.map((m) => m.category).filter(Boolean))) as string[];
+    return cats.sort((a, b) => a.localeCompare(b));
+  }, [masterItems]);
 
   // Date Filtering State (Targeting Date Recorded)
   const [dateFilterOption, setDateFilterOption] = useState<DateFilterOption>('ALL');
@@ -113,13 +135,16 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
         item.description.toLowerCase().includes(nameFilter.trim().toLowerCase()) ||
         item.productCode.toLowerCase().includes(nameFilter.trim().toLowerCase());
 
-      // 3. Category Filter
+      // 3. Material Type Filter
+      const matMatch = materialTypeFilter === 'ALL' || (item.materialType || (item.category === 'RM' || item.category === 'PS' ? item.category : 'RM')) === materialTypeFilter;
+
+      // 4. Category Filter
       const catMatch = categoryFilter === 'ALL' || item.category === categoryFilter;
 
-      // 4. Status Filter
+      // 5. Status Filter
       const statusMatch = statusFilter === 'ALL' || item.status === statusFilter;
 
-      // 5. Sample Registration Filter
+      // 6. Sample Registration Filter
       const reg = regMap.get(item.productCode.toLowerCase());
       const isRegistered = !!reg;
       const regMatch =
@@ -127,7 +152,12 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
         (regFilter === 'REGISTERED' && isRegistered) ||
         (regFilter === 'UNREGISTERED' && !isRegistered);
 
-      // 6. Date Filtering (Automatically targets Date Recorded: item.createdAt)
+      // 7. Registered By Filter
+      const registeredByMatch =
+        registeredByFilter === 'ALL' ||
+        (reg && reg.registeredBy && reg.registeredBy.toLowerCase() === registeredByFilter.toLowerCase());
+
+      // 8. Date Filtering (Automatically targets Date Recorded: item.createdAt)
       let dateMatch = true;
       if (dateFilterOption !== 'ALL' || customStartDate || customEndDate) {
         const itemCreatedDate = extractDateStr(item.createdAt);
@@ -146,12 +176,14 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
         if (customEndDate && itemCreatedDate > customEndDate) dateMatch = false;
       }
 
-      return searchMatch && nameMatch && catMatch && statusMatch && regMatch && dateMatch;
+      return searchMatch && nameMatch && matMatch && catMatch && statusMatch && regMatch && registeredByMatch && dateMatch;
     });
   }, [
     masterItems,
     searchTerm,
     nameFilter,
+    registeredByFilter,
+    materialTypeFilter,
     categoryFilter,
     statusFilter,
     regFilter,
@@ -168,6 +200,8 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
   const hasActiveFilters =
     searchTerm !== '' ||
     nameFilter !== '' ||
+    registeredByFilter !== 'ALL' ||
+    materialTypeFilter !== 'ALL' ||
     categoryFilter !== 'ALL' ||
     statusFilter !== 'ALL' ||
     regFilter !== 'ALL' ||
@@ -178,6 +212,8 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
   const resetAllFilters = () => {
     handleSearchChange('');
     setNameFilter('');
+    setRegisteredByFilter('ALL');
+    setMaterialTypeFilter('ALL');
     setCategoryFilter('ALL');
     setStatusFilter('ALL');
     setRegFilter('ALL');
@@ -212,20 +248,27 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
             )}
           </div>
 
-          {/* Specific Name Filter (Requested Feature) */}
-          <div className="relative flex-1 min-w-[200px]">
-            <Tag className="w-4 h-4 text-blue-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          {/* Specific Name Filter (Requested Feature: Filter by Item Name) */}
+          <div className="relative flex-1 min-w-[210px]">
+            <Tag className="w-4 h-4 text-blue-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
-              placeholder="Filter by Item Name / Material..."
+              list="master-item-names-list"
+              placeholder="Filter by Item Name..."
               value={nameFilter}
               onChange={(e) => setNameFilter(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 text-xs bg-[#1A1A1A] border border-blue-900/40 text-blue-200 placeholder-gray-500 rounded-lg focus:outline-hidden focus:border-blue-500 transition-colors"
+              className="w-full pl-9 pr-8 py-2 text-xs bg-[#1A1A1A] border border-blue-900/40 text-blue-200 placeholder-gray-500 rounded-lg focus:outline-hidden focus:border-blue-500 transition-colors font-medium"
             />
+            <datalist id="master-item-names-list">
+              {distinctItemNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
             {nameFilter && (
               <button
                 onClick={() => setNameFilter('')}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                title="Clear Name Filter"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -268,20 +311,37 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
           </div>
         </div>
 
-        {/* Secondary Row: Dropdowns (Category, Status, Sample Status) & Quick Date Presets */}
+        {/* Secondary Row: Dropdowns (Material Type, Category, Status, Sample Status) & Quick Date Presets */}
         <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-[#222]/80">
           <div className="flex flex-wrap items-center gap-2">
-            {/* Category Filter */}
+            {/* Material Type Filter */}
+            <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
+              <span className="text-gray-400 font-medium">Type:</span>
+              <select
+                value={materialTypeFilter}
+                onChange={(e) => setMaterialTypeFilter(e.target.value as any)}
+                className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer"
+              >
+                <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All (RM & PS)</option>
+                <option value="RM" className="bg-[#1A1A1A] text-gray-200">RM (Raw Material)</option>
+                <option value="PS" className="bg-[#1A1A1A] text-gray-200">PS (Prod Supply)</option>
+              </select>
+            </div>
+
+            {/* Dynamic Category Filter */}
             <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
               <span className="text-gray-400 font-medium">Category:</span>
               <select
                 value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value as any)}
-                className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer"
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer max-w-[140px] truncate"
               >
-                <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All (RM & PS)</option>
-                <option value="RM" className="bg-[#1A1A1A] text-gray-200">Raw Material (RM)</option>
-                <option value="PS" className="bg-[#1A1A1A] text-gray-200">Prod Supply (PS)</option>
+                <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Categories</option>
+                {distinctCategories.map((cat) => (
+                  <option key={cat} value={cat} className="bg-[#1A1A1A] text-gray-200">
+                    {cat}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -310,6 +370,24 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                 <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Samples</option>
                 <option value="REGISTERED" className="bg-[#1A1A1A] text-gray-200">Registered</option>
                 <option value="UNREGISTERED" className="bg-[#1A1A1A] text-gray-200">Pending</option>
+              </select>
+            </div>
+
+            {/* Registered By Filter (Requested Feature: Filter by Registered By) */}
+            <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
+              <User className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="text-gray-400 font-medium">Reg By:</span>
+              <select
+                value={registeredByFilter}
+                onChange={(e) => setRegisteredByFilter(e.target.value)}
+                className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer max-w-[150px] truncate"
+              >
+                <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Personnel</option>
+                {distinctRegisteredByList.map((person) => (
+                  <option key={person} value={person} className="bg-[#1A1A1A] text-gray-200">
+                    {person}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -446,6 +524,12 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                 <X className="w-3 h-3 cursor-pointer hover:text-white" onClick={() => setRegFilter('ALL')} />
               </span>
             )}
+            {registeredByFilter !== 'ALL' && (
+              <span className="inline-flex items-center gap-1 bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded font-mono">
+                Reg By: {registeredByFilter}
+                <X className="w-3 h-3 cursor-pointer hover:text-white" onClick={() => setRegisteredByFilter('ALL')} />
+              </span>
+            )}
             {dateFilterOption !== 'ALL' && (
               <span className="inline-flex items-center gap-1 bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded font-mono">
                 Date: {dateFilterOption === 'CUSTOM' ? `${customStartDate || '...'} to ${customEndDate || '...'}` : dateFilterOption}
@@ -464,9 +548,10 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
               <tr className="bg-[#0A0A0A] border-b border-[#222] text-gray-500 font-mono uppercase tracking-wider text-[10px]">
                 <th className="py-3 px-3 w-20 text-center font-medium">Actions</th>
                 <th className="py-3 px-3 w-28 text-center font-medium">Reference</th>
-                <th className="py-3 px-4 w-40 font-medium">Product Code</th>
+                <th className="py-3 px-4 w-36 font-medium">Product Code</th>
                 <th className="py-3 px-4 font-medium">Material / Item Description</th>
-                <th className="py-3 px-3 w-24 font-medium">Category</th>
+                <th className="py-3 px-3 w-20 font-medium">Type</th>
+                <th className="py-3 px-3 w-28 font-medium">Category</th>
                 <th className="py-3 px-3 w-20 font-medium">Status</th>
                 <th className="py-3 px-3 w-16 font-medium">Unit</th>
                 <th className="py-3 px-4 w-36 font-medium">Sample Status</th>
@@ -582,16 +667,23 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                         <div className="truncate">{item.description}</div>
                       </td>
 
-                      {/* 5. Category */}
+                      {/* 5. Material Type */}
                       <td className="py-3 px-3 font-mono">
                         <span
                           className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded ${
-                            item.category === 'RM'
-                              ? 'bg-[#222] text-blue-400 border border-blue-900/40'
-                              : 'bg-[#222] text-purple-400 border border-purple-900/40'
+                            (item.materialType || item.category) === 'PS'
+                              ? 'bg-purple-500/10 text-purple-400 border border-purple-900/40'
+                              : 'bg-blue-500/10 text-blue-400 border border-blue-900/40'
                           }`}
                         >
-                          {item.category === 'RM' ? 'RM' : 'PS'}
+                          {item.materialType || ((item.category === 'RM' || item.category === 'PS') ? item.category : 'RM')}
+                        </span>
+                      </td>
+
+                      {/* 6. Dynamic Category */}
+                      <td className="py-3 px-3">
+                        <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded bg-[#1C1C1C] text-gray-300 border border-[#333] max-w-[120px] truncate">
+                          {item.category || 'Box'}
                         </span>
                       </td>
 
@@ -621,11 +713,17 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                       {/* 8. Sample Registration Badge */}
                       <td className="py-3 px-4">
                         {isRegistered ? (
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-col items-start gap-1">
                             <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">
                               <ShieldCheck className="w-3 h-3 text-green-400" />
                               <span>{reg.revision} ({reg.registrationDate})</span>
                             </span>
+                            {reg.registeredBy && (
+                              <span className="inline-flex items-center gap-1 text-[10px] text-gray-400 font-sans">
+                                <User className="w-2.5 h-2.5 text-cyan-400/80" />
+                                <span>{reg.registeredBy}</span>
+                              </span>
+                            )}
                           </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20">

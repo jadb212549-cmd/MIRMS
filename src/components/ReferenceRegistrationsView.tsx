@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { ReferenceRegistration, MasterItem, AppConfig } from '../types';
-import { ShieldCheck, Search, Filter, Plus, FileText, FileSpreadsheet, LayoutGrid, List, Image, Paperclip, Eye, Download } from 'lucide-react';
+import { ShieldCheck, Search, Filter, Plus, FileText, FileSpreadsheet, LayoutGrid, List, Image, Paperclip, Eye, Download, Printer } from 'lucide-react';
 import { excelService } from '../services/excelService';
 import { wordService } from '../services/wordService';
+import { InspectionProofModal } from './InspectionProofModal';
 
 interface ReferenceRegistrationsViewProps {
   registrations: ReferenceRegistration[];
@@ -26,6 +27,7 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
   onSearchChange
 }) => {
   const [localSearch, setLocalSearch] = useState('');
+  const [proofRegistration, setProofRegistration] = useState<ReferenceRegistration | null>(null);
   const searchTerm = globalSearchQuery || localSearch;
 
   const handleSearchChange = (val: string) => {
@@ -269,6 +271,13 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
 
                   <div className="flex items-center gap-1.5">
                     <button
+                      onClick={() => setProofRegistration(reg)}
+                      title="Print Inspection Proof"
+                      className="p-1.5 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={() => {
                         if (master) {
                           wordService.generateAndSave(reg, master, config, reg.registeredBy);
@@ -306,7 +315,7 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                   <th className="py-3 px-3 w-28 font-medium">Reg Date</th>
                   <th className="py-3 px-3 w-24 text-center font-medium">Files</th>
                   <th className="py-3 px-3 w-32 font-medium">Word Form</th>
-                  <th className="py-3 px-4 w-32 text-right font-medium">Actions</th>
+                  <th className="py-3 px-4 w-36 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#222]">
@@ -366,6 +375,13 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => setProofRegistration(reg)}
+                            title="Print Inspection Proof"
+                            className="p-1 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+                          <button
                             onClick={() => {
                               if (master) {
                                 wordService.generateAndSave(reg, master, config, reg.registeredBy);
@@ -391,6 +407,17 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
             </table>
           </div>
         </div>
+      )}
+
+      {/* Print Inspection Proof Modal */}
+      {proofRegistration && (
+        <InspectionProofModal
+          isOpen={!!proofRegistration}
+          onClose={() => setProofRegistration(null)}
+          registration={proofRegistration}
+          masterItem={masterMap.get(proofRegistration.productCode.toLowerCase())}
+          config={config}
+        />
       )}
     </div>
   );

@@ -11,14 +11,16 @@ interface NewPlaceholderModalProps {
   customFields?: CustomFieldDefinition[];
 }
 
-const CATEGORY_OPTIONS: Array<WordDocPlaceholder['category']> = [
+const CATEGORY_OPTIONS: Array<NonNullable<WordDocPlaceholder['category']>> = [
   'Custom',
-  'QC Inspection',
   'Master',
   'Registration',
+  'Sign-off',
+  'QC Inspection',
   'Compliance',
   'Packaging',
-  'CustomField'
+  'CustomField',
+  'System'
 ];
 
 export const NewPlaceholderModal: React.FC<NewPlaceholderModalProps> = ({

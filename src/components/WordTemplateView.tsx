@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import JSZip from 'jszip';
 import { AppConfig, MasterItem, ReferenceRegistration, WordDocPlaceholder } from '../types';
 import { 
   FileText, 
@@ -120,12 +121,16 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
         (item.label && item.label.toLowerCase().includes(placeholderSearch.toLowerCase())) ||
         item.desc.toLowerCase().includes(placeholderSearch.toLowerCase());
 
+      const itemCat = item.category?.toUpperCase() || 'CUSTOM';
       const matchCategory =
         selectedCategory === 'ALL' ||
         (selectedCategory === 'CUSTOM' && (item.isCustom || item.category === 'Custom')) ||
-        (selectedCategory === 'SYSTEM' && item.isSystem) ||
+        (selectedCategory === 'SYSTEM' && (item.isSystem || item.category === 'System')) ||
         (selectedCategory === 'CUSTOMFIELD' && item.category === 'CustomField') ||
-        item.category?.toUpperCase() === selectedCategory;
+        (selectedCategory === 'MASTER' && item.category === 'Master') ||
+        (selectedCategory === 'REGISTRATION' && item.category === 'Registration') ||
+        (selectedCategory === 'SIGN-OFF' && (item.category === 'Sign-off' || item.category === 'Signoff')) ||
+        itemCat === selectedCategory;
 
       return matchSearch && matchCategory;
     });
@@ -133,11 +138,24 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
 
   // Categories list
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: allPlaceholders.length, CUSTOM: 0, SYSTEM: 0, CUSTOMFIELD: 0 };
+    const counts: Record<string, number> = { 
+      ALL: allPlaceholders.length, 
+      MASTER: 0, 
+      REGISTRATION: 0, 
+      'SIGN-OFF': 0, 
+      SYSTEM: 0, 
+      CUSTOMFIELD: 0,
+      CUSTOM: 0 
+    };
     allPlaceholders.forEach((p) => {
+      const cat = p.category?.toUpperCase() || 'CUSTOM';
+      if (cat === 'MASTER') counts.MASTER = (counts.MASTER || 0) + 1;
+      else if (cat === 'REGISTRATION') counts.REGISTRATION = (counts.REGISTRATION || 0) + 1;
+      else if (cat === 'SIGN-OFF' || cat === 'SIGNOFF') counts['SIGN-OFF'] = (counts['SIGN-OFF'] || 0) + 1;
+      else if (cat === 'SYSTEM') counts.SYSTEM = (counts.SYSTEM || 0) + 1;
+      else if (cat === 'CUSTOMFIELD') counts.CUSTOMFIELD = (counts.CUSTOMFIELD || 0) + 1;
+      
       if (p.isCustom || p.category === 'Custom') counts.CUSTOM = (counts.CUSTOM || 0) + 1;
-      if (p.isSystem) counts.SYSTEM = (counts.SYSTEM || 0) + 1;
-      if (p.category === 'CustomField') counts.CUSTOMFIELD = (counts.CUSTOMFIELD || 0) + 1;
     });
     return counts;
   }, [allPlaceholders]);
@@ -146,6 +164,100 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
     navigator.clipboard.writeText(tag);
     setCopiedKey(tag);
     setTimeout(() => setCopiedKey(null), 2000);
+  };
+
+  const handleCopyAllPlaceholders = () => {
+    const text = allPlaceholders.map(p => `${p.tag.padEnd(24)} -> ${p.label || ''} (${p.desc})`).join('\n');
+    navigator.clipboard.writeText(text);
+    setStatusMsg({ type: 'success', text: `Copied all ${allPlaceholders.length} placeholder tags to clipboard.` });
+    setTimeout(() => setStatusMsg(null), 3500);
+  };
+
+  const handleTemplateFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.docx') && !file.name.endsWith('.doc')) {
+      setStatusMsg({ type: 'error', text: 'Please select a valid Microsoft Word (.docx) document file.' });
+      setTimeout(() => setStatusMsg(null), 4000);
+      return;
+    }
+
+    try {
+      setStatusMsg({ type: 'info', text: `Processing Word template "${file.name}"...` });
+
+      const arrayBuffer = await file.arrayBuffer();
+      let binary = '';
+      const bytes = new Uint8Array(arrayBuffer);
+      const len = bytes.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64Data = btoa(binary);
+
+      // Extract placeholders using JSZip
+      let extractedTags: string[] = [];
+      try {
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        const docXmlFile = zip.file('word/document.xml');
+        if (docXmlFile) {
+          const xmlText = await docXmlFile.async('text');
+          const plainText = xmlText.replace(/<[^>]+>/g, '');
+          const tagMatches = plainText.match(/\{\{([a-zA-Z0-9_]+)\}\}/g);
+          if (tagMatches) {
+            extractedTags = Array.from(new Set(tagMatches));
+          }
+        }
+      } catch (zipErr) {
+        console.warn('Could not extract zip contents for tag scanning:', zipErr);
+      }
+
+      // Merge extracted placeholders into existing placeholders
+      const currentList = config.wordDocPlaceholders && config.wordDocPlaceholders.length > 0
+        ? [...config.wordDocPlaceholders]
+        : [...DEFAULT_WORD_PLACEHOLDERS];
+
+      let newlyAddedCount = 0;
+      extractedTags.forEach((fullTag) => {
+        const cleanTag = fullTag.replace(/^\{\{|\}\}$/g, '');
+        const exists = currentList.some(
+          (p) => p.tag.toLowerCase() === fullTag.toLowerCase() || p.id.toLowerCase() === `ph_${cleanTag.toLowerCase()}`
+        );
+        if (!exists) {
+          newlyAddedCount++;
+          currentList.push({
+            id: `ph_${cleanTag.toLowerCase()}_${Date.now()}`,
+            tag: fullTag,
+            label: cleanTag.replace(/([A-Z])/g, ' $1').trim(),
+            desc: `Detected from imported template (${file.name})`,
+            category: 'Custom',
+            sampleValue: `[${cleanTag}]`,
+            isSystem: false,
+            isCustom: true
+          });
+        }
+      });
+
+      setTemplateName(file.name);
+      await onConfigChange({
+        wordTemplateName: file.name,
+        wordTemplateContent: base64Data,
+        wordDocPlaceholders: currentList
+      });
+
+      setStatusMsg({
+        type: 'success',
+        text: `Word template "${file.name}" imported and active! Found ${extractedTags.length} placeholder tag(s)${newlyAddedCount > 0 ? ` (${newlyAddedCount} new added)` : ''}.`
+      });
+      setTimeout(() => setStatusMsg(null), 5000);
+    } catch (err: any) {
+      console.error('Failed to import Word template:', err);
+      setStatusMsg({
+        type: 'error',
+        text: `Failed to import Word template: ${err.message || 'Invalid or corrupted .docx file'}`
+      });
+      setTimeout(() => setStatusMsg(null), 5000);
+    }
   };
 
   const handleSaveConfig = async (e: React.FormEvent) => {
@@ -229,19 +341,37 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
     }
 
     const tagKey = item.tag.replace(/^\{\{|\}\}$/g, '');
-    switch (tagKey.toLowerCase()) {
+    const tagLower = tagKey.toLowerCase();
+    
+    switch (tagLower) {
+      // Master Data
       case 'productcode':
         return selectedReg.productCode;
       case 'description':
         return selectedMaster.description;
+      case 'materialtype': {
+        const matType = selectedReg.materialType || selectedMaster.materialType || (selectedMaster.category === 'PS' ? 'PS' : 'RM');
+        return matType === 'PS' ? 'Production Supply (PS)' : 'Raw Material (RM)';
+      }
+      case 'materialtypecode':
+        return selectedReg.materialType || selectedMaster.materialType || (selectedMaster.category === 'PS' ? 'PS' : 'RM');
       case 'category':
-        return selectedMaster.category === 'RM' ? 'Raw Material (RM)' : 'Production Supply (PS)';
+        return selectedReg.category || selectedMaster.category || 'Standard';
       case 'unit':
         return selectedMaster.unit || 'Piece';
+      case 'itemstatus':
+      case 'status':
+        return selectedMaster.status || 'Active';
+      case 'itemcreatedat':
+        return selectedMaster.createdAt ? selectedMaster.createdAt.split('T')[0] : '2026-08-15';
+        
+      // Registration & QA
       case 'revision':
         return selectedReg.revision || 'Rev 01';
       case 'registeredby':
         return selectedReg.registeredBy;
+      case 'registeredbyid':
+        return `EMP-${selectedReg.registeredBy ? selectedReg.registeredBy.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase() : 'QA01'}`;
       case 'registrationdate':
         return selectedReg.registrationDate;
       case 'supplier':
@@ -250,19 +380,49 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
         return selectedReg.specification || 'N/A';
       case 'remarks':
         return selectedReg.remarks || 'None';
-      case 'companyname':
-        return config.companyName || 'Precision Industrial Manufacturing Corp.';
-      case 'todaydate':
-        return new Date().toISOString().split('T')[0];
+      case 'registrationid':
+        return selectedReg.id;
+      case 'proofid':
+        return `IP-${selectedReg.productCode.replace(/[^a-zA-Z0-9]/g, '')}-${selectedReg.id.slice(-6)}`;
       case 'photoscount':
         return String(selectedReg.photos?.length || 0);
       case 'photoslist':
         return `${selectedReg.photos?.length || 0} attached sample photos`;
-      case 'itemstatus':
-      case 'status':
-        return selectedMaster.status;
+      case 'attachmentscount':
+        return String(selectedReg.attachments?.length || 0);
+        
+      // Sign-off & Verification
+      case 'checkedby':
+        return 'JD. Stone (System Admin)';
+      case 'checkedbyid':
+        return 'ADM-001';
+      case 'approvedby':
+        return 'Quality Assurance Director';
+      case 'approvaldate':
+        return selectedReg.registrationDate;
+      case 'inspectorsignature':
+        return '___________________________ (Sign & Date)';
+      case 'adminsignature':
+        return '___________________________ (Sign & Date)';
+
+      // System & Org
+      case 'companyname':
+        return config.companyName || 'Precision Industrial Manufacturing Corp.';
+      case 'department':
+        return 'Quality Assurance & Materials Engineering';
+      case 'todaydate':
+        return new Date().toISOString().split('T')[0];
+      case 'todaydatetime':
+        return new Date().toISOString().replace('T', ' ').slice(0, 19);
+      case 'currentyear':
+        return String(new Date().getFullYear());
+      case 'documenttitle':
+        return 'MATERIAL REFERENCE & SAMPLE SPECIFICATION FORM';
+      case 'templatename':
+        return config.wordTemplateName || 'Official_Material_Reference_Template_v2.docx';
+
+      // Custom attributes / Custom fields
       default:
-        // Check custom fields
         if (selectedReg.customFields && selectedReg.customFields[tagKey] !== undefined) {
           const val = selectedReg.customFields[tagKey];
           return typeof val === 'boolean' ? (val ? 'YES' : 'NO') : String(val);
@@ -318,8 +478,23 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
             </div>
           </div>
 
-          {/* Action Toolbar */}
+            {/* Action Toolbar */}
           <div className="flex items-center gap-2.5 flex-wrap self-start lg:self-center">
+            {/* Import Word Template (.docx) Action */}
+            <label
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-200 bg-[#1A1A1A] hover:bg-[#252525] border border-[#333] hover:border-gray-500 rounded-lg cursor-pointer transition-colors shadow-xs"
+              title="Import and upload an official Microsoft Word (.docx) document template"
+            >
+              <Upload className="w-3.5 h-3.5 text-blue-400" />
+              <span>Import Word Doc</span>
+              <input
+                type="file"
+                accept=".docx,.doc,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={handleTemplateFileUpload}
+                className="hidden"
+              />
+            </label>
+
             {/* Layout Mode Segmented Control */}
             <div className="flex items-center bg-[#101010] border border-[#2D2D2D] rounded-lg p-0.5 text-xs font-mono">
               <button
@@ -556,9 +731,12 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
                 <span className="text-[11px] font-mono text-gray-500 mr-1">Filter:</span>
                 {[
                   { id: 'ALL', label: `All (${categoryCounts.ALL || 0})` },
-                  { id: 'CUSTOM', label: `Custom (${categoryCounts.CUSTOM || 0})` },
+                  { id: 'MASTER', label: `Master (${categoryCounts.MASTER || 0})` },
+                  { id: 'REGISTRATION', label: `QA (${categoryCounts.REGISTRATION || 0})` },
+                  { id: 'SIGN-OFF', label: `Sign-off (${categoryCounts['SIGN-OFF'] || 0})` },
                   { id: 'SYSTEM', label: `System (${categoryCounts.SYSTEM || 0})` },
-                  { id: 'CUSTOMFIELD', label: `Custom Fields (${categoryCounts.CUSTOMFIELD || 0})` }
+                  { id: 'CUSTOMFIELD', label: `Custom Fields (${categoryCounts.CUSTOMFIELD || 0})` },
+                  { id: 'CUSTOM', label: `Custom (${categoryCounts.CUSTOM || 0})` }
                 ].map((pill) => (
                   <button
                     key={pill.id}
@@ -566,7 +744,7 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
                     onClick={() => setSelectedCategory(pill.id)}
                     className={`text-[11px] px-2 py-1 rounded-md transition-all font-mono ${
                       selectedCategory === pill.id
-                        ? 'bg-blue-600 text-white font-bold'
+                        ? 'bg-blue-600 text-white font-bold shadow-xs'
                         : 'bg-[#1A1A1A] text-gray-400 hover:text-white border border-[#2E2E2E]'
                     }`}
                   >
@@ -574,7 +752,15 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
                   </button>
                 ))}
 
-                <div className="ml-auto">
+                <div className="ml-auto flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyAllPlaceholders}
+                    className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-mono transition-colors bg-[#1A1A1A] px-2 py-1 rounded border border-blue-500/30"
+                    title="Copy all placeholder tags list to clipboard to paste into Word template"
+                  >
+                    <Copy className="w-3 h-3" /> Copy All
+                  </button>
                   <button
                     type="button"
                     onClick={handleResetPlaceholders}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   MasterItem, 
   ReferenceRegistration, 
@@ -6,7 +6,8 @@ import {
   DocumentAttachment, 
   CustomFieldDefinition,
   PhotoCategory,
-  PrintLayoutType
+  PrintLayoutType,
+  MaterialType
 } from '../types';
 import { 
   X, 
@@ -24,9 +25,19 @@ import {
   Layers,
   CheckSquare,
   Square,
-  Sparkles
+  Sparkles,
+  Lock,
+  User,
+  Search,
+  Tag,
+  Check,
+  ChevronDown,
+  Calendar,
+  Boxes
 } from 'lucide-react';
 import { tauriBridge } from '../services/tauriService';
+import { userService } from '../services/userService';
+import { db } from '../services/db';
 
 interface ReferenceRegistrationModalProps {
   isOpen: boolean;
@@ -59,6 +70,11 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
   existingRegistration
 }) => {
   const [selectedProductCode, setSelectedProductCode] = useState('');
+  const [materialType, setMaterialType] = useState<MaterialType>('RM');
+  const [category, setCategory] = useState<string>('Box');
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
+  const [customCategoryName, setCustomCategoryName] = useState('');
   const [registrationDate, setRegistrationDate] = useState('');
   const [registeredBy, setRegisteredBy] = useState('');
   const [supplier, setSupplier] = useState('');
@@ -72,12 +88,65 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const loadCategories = async () => {
+      const cats = await db.getCategories();
+      setCategoriesList(cats);
+    };
+    if (isOpen) {
+      loadCategories();
+    }
+  }, [isOpen]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Filtered auto-suggestions from master items catalog based on what the user types
+  const suggestedMasterItems = useMemo(() => {
+    const q = selectedProductCode.trim().toLowerCase();
+    if (!q) {
+      return masterItems.slice(0, 8);
+    }
+    return masterItems.filter(
+      (item) =>
+        item.productCode.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        (item.category && item.category.toLowerCase().includes(q)) ||
+        (item.materialType && item.materialType.toLowerCase().includes(q))
+    ).slice(0, 10);
+  }, [masterItems, selectedProductCode]);
+
+  useEffect(() => {
+    const currentUser = userService.getCurrentUser();
+    const activeShortName = currentUser?.shortName || defaultUser || 'JD. Stone';
+
     if (existingRegistration) {
       setSelectedProductCode(existingRegistration.productCode);
+      setMaterialType(existingRegistration.materialType || 'RM');
+      setCategory(existingRegistration.category || 'Box');
+      setIsCustomCategory(false);
+      setCustomCategoryName('');
       setRegistrationDate(existingRegistration.registrationDate);
-      setRegisteredBy(existingRegistration.registeredBy);
+      
+      // Match existing registeredBy to a user's shortName if possible
+      const matchingUser = userService.getRegisteredUsers().find(
+        (u) => u.fullName === existingRegistration.registeredBy || u.shortName === existingRegistration.registeredBy
+      );
+      setRegisteredBy(matchingUser ? matchingUser.shortName : existingRegistration.registeredBy);
+
       setSupplier(existingRegistration.supplier || '');
       setSpecification(existingRegistration.specification || '');
       setRemarks(existingRegistration.remarks || '');
@@ -97,8 +166,12 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
       setAttachments(existingRegistration.attachments || []);
     } else if (initialMasterItem) {
       setSelectedProductCode(initialMasterItem.productCode);
+      setMaterialType(initialMasterItem.materialType || 'RM');
+      setCategory(initialMasterItem.category || 'Box');
+      setIsCustomCategory(false);
+      setCustomCategoryName('');
       setRegistrationDate(new Date().toISOString().split('T')[0]);
-      setRegisteredBy(defaultUser || 'Juan Dela Cruz');
+      setRegisteredBy(activeShortName);
       setSupplier('');
       setSpecification('');
       setRemarks('');
@@ -116,9 +189,14 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
       setPhotos([]);
       setAttachments([]);
     } else {
-      setSelectedProductCode(masterItems[0]?.productCode || '');
+      const firstItem = masterItems[0];
+      setSelectedProductCode(firstItem?.productCode || '');
+      setMaterialType(firstItem?.materialType || 'RM');
+      setCategory(firstItem?.category || 'Box');
+      setIsCustomCategory(false);
+      setCustomCategoryName('');
       setRegistrationDate(new Date().toISOString().split('T')[0]);
-      setRegisteredBy(defaultUser || 'Juan Dela Cruz');
+      setRegisteredBy(activeShortName);
       setSupplier('');
       setSpecification('');
       setRemarks('');
@@ -130,6 +208,17 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     }
     setError(null);
   }, [isOpen, initialMasterItem, existingRegistration, defaultUser, masterItems, customFieldDefs]);
+
+  // When matching catalog item is chosen or found, sync defaults if user didn't customize
+  const handleSelectMasterItem = (item: MasterItem) => {
+    setSelectedProductCode(item.productCode);
+    if (item.materialType) setMaterialType(item.materialType);
+    if (item.category) {
+      setCategory(item.category);
+      setIsCustomCategory(false);
+    }
+    setShowSuggestions(false);
+  };
 
   if (!isOpen) return null;
 
@@ -238,7 +327,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProductCode.trim()) {
-      setError('Please select a Master Item Product Code.');
+      setError('Please enter a Product Code.');
       return;
     }
     if (!registeredBy.trim()) {
@@ -251,10 +340,13 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
 
     // Selected print photo IDs
     const selectedPrintPhotoIds = photos.filter(p => p.includeInPrint).map(p => p.id);
+    const finalCategory = isCustomCategory ? customCategoryName.trim() : category.trim();
 
     const res = await onSave({
       masterItemId: currentMasterItem?.id || '',
       productCode: selectedProductCode.trim(),
+      materialType,
+      category: finalCategory || 'Box',
       registrationDate: registrationDate || new Date().toISOString().split('T')[0],
       registeredBy: registeredBy.trim(),
       supplier: supplier.trim() || undefined,
@@ -318,37 +410,105 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
             </div>
           )}
 
-          {/* Section 1: Linked Master Item */}
+          {/* Section 1: Linked Product Code & Master Item Reference */}
           <div className="bg-[#141414] p-4 rounded-xl border border-[#222] space-y-3">
-            <div className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">
-              1. Master Item Reference (From Catalog)
+            <div className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider flex items-center justify-between">
+              <span>1. Product Code & Catalog Reference</span>
+              <span className="text-[11px] font-normal text-gray-500 lowercase">
+                (Type manually or select from suggestions)
+              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1 font-mono">
-                  Master Product Code <span className="text-red-400">*</span>
+              <div className="relative">
+                <label className="block text-xs font-semibold text-gray-300 mb-1 font-mono flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-blue-400" />
+                    Product Code <span className="text-red-400">*</span>
+                  </span>
+                  {currentMasterItem ? (
+                    <span className="text-[10px] text-green-400 font-mono flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Catalog Matched
+                    </span>
+                  ) : selectedProductCode.trim() ? (
+                    <span className="text-[10px] text-amber-400 font-mono">
+                      Custom Code
+                    </span>
+                  ) : null}
                 </label>
-                {existingRegistration ? (
+
+                <div className="relative">
                   <input
                     type="text"
-                    disabled
+                    required
+                    placeholder="Type product code (e.g. RM-101, SP-201)..."
                     value={selectedProductCode}
-                    className="w-full text-xs px-3 py-2 border border-[#333] rounded-lg bg-[#1A1A1A] font-mono font-bold text-gray-400"
+                    onChange={(e) => {
+                      setSelectedProductCode(e.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    className="w-full text-xs pl-8 pr-8 py-2 bg-[#1A1A1A] border border-[#333] text-gray-100 rounded-lg focus:outline-hidden focus:border-blue-500 font-mono font-bold"
+                    autoComplete="off"
                   />
-                ) : (
-                  <select
-                    value={selectedProductCode}
-                    onChange={(e) => setSelectedProductCode(e.target.value)}
-                    className="w-full text-xs px-3 py-2 border border-[#333] rounded-lg bg-[#1A1A1A] text-gray-200 focus:outline-hidden focus:border-blue-500 font-mono font-bold cursor-pointer"
+                  <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  {selectedProductCode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProductCode('');
+                        setShowSuggestions(true);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-200"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Auto-suggest dropdown lookup from Master Items */}
+                {showSuggestions && suggestedMasterItems.length > 0 && (
+                  <div
+                    ref={suggestionsRef}
+                    className="absolute left-0 right-0 top-full mt-1 bg-[#181818] border border-[#333] rounded-lg shadow-2xl z-50 max-h-56 overflow-y-auto divide-y divide-[#262626]"
                   >
-                    <option value="" className="bg-[#1A1A1A] text-gray-400">Select Master Item...</option>
-                    {masterItems.map((item) => (
-                      <option key={item.id} value={item.productCode} className="bg-[#1A1A1A] text-gray-200">
-                        {item.productCode} — {item.description.substring(0, 40)}... ({item.category})
-                      </option>
-                    ))}
-                  </select>
+                    <div className="px-3 py-1.5 bg-[#121212] text-[10px] font-mono text-gray-400 flex items-center justify-between">
+                      <span>Suggested Master Items ({suggestedMasterItems.length})</span>
+                      <span className="text-gray-500">Click to select</span>
+                    </div>
+                    {suggestedMasterItems.map((item) => {
+                      const isSelected = item.productCode.toLowerCase() === selectedProductCode.trim().toLowerCase();
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSelectedProductCode(item.productCode);
+                            setShowSuggestions(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-[#252525] transition-colors ${
+                            isSelected ? 'bg-blue-600/15 text-blue-300' : 'text-gray-200'
+                          }`}
+                        >
+                          <div className="flex flex-col min-w-0 pr-2">
+                            <span className="font-mono font-bold text-gray-100 flex items-center gap-1.5">
+                              {item.productCode}
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded font-sans font-medium ${
+                                item.category === 'RM' ? 'bg-amber-500/15 text-amber-300' : 'bg-purple-500/15 text-purple-300'
+                              }`}>
+                                {item.category}
+                              </span>
+                            </span>
+                            <span className="text-[11px] text-gray-400 truncate mt-0.5">
+                              {item.description}
+                            </span>
+                          </div>
+                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-400 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
@@ -367,12 +527,87 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
               </div>
             </div>
 
+            {/* Material Type & Category Classification */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono">
+                  Material Type <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={materialType}
+                  onChange={(e) => setMaterialType(e.target.value as MaterialType)}
+                  className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-medium cursor-pointer"
+                >
+                  <option value="RM" className="bg-[#1A1A1A] text-gray-200">RM (Raw Material)</option>
+                  <option value="PS" className="bg-[#1A1A1A] text-gray-200">PS (Production Supply)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono flex items-center justify-between">
+                  <span>Category (e.g. Box, Tape) <span className="text-red-400">*</span></span>
+                  {!isCustomCategory ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomCategory(true)}
+                      className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-sans font-medium"
+                    >
+                      <Plus className="w-3 h-3" /> Add New
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomCategory(false)}
+                      className="text-[10px] text-gray-400 hover:text-gray-300 font-sans"
+                    >
+                      From List
+                    </button>
+                  )}
+                </label>
+
+                {!isCustomCategory ? (
+                  <select
+                    value={category}
+                    onChange={(e) => {
+                      if (e.target.value === '__NEW__') {
+                        setIsCustomCategory(true);
+                      } else {
+                        setCategory(e.target.value);
+                      }
+                    }}
+                    className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-medium cursor-pointer"
+                  >
+                    {categoriesList.map((cat) => (
+                      <option key={cat} value={cat} className="bg-[#1A1A1A] text-gray-200">
+                        {cat}
+                      </option>
+                    ))}
+                    {!categoriesList.includes(category) && category && (
+                      <option value={category} className="bg-[#1A1A1A] text-gray-200">{category}</option>
+                    )}
+                    <option value="__NEW__" className="bg-[#1A1A1A] text-blue-400">+ Add New Category...</option>
+                  </select>
+                ) : (
+                  <input
+                    type="text"
+                    placeholder="Enter new category (e.g. Box, Tape, Film)..."
+                    value={customCategoryName}
+                    onChange={(e) => setCustomCategoryName(e.target.value)}
+                    className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-blue-500/50 text-gray-100 rounded-lg focus:outline-hidden focus:border-blue-400"
+                    autoFocus
+                  />
+                )}
+              </div>
+            </div>
+
             {currentMasterItem && (
-              <div className="text-xs bg-[#1A1A1A] p-2.5 rounded-lg border border-[#2A2A2A] text-gray-300 flex items-center justify-between">
+              <div className="text-xs bg-[#1A1A1A] p-2.5 rounded-lg border border-[#2A2A2A] text-gray-300 flex items-center justify-between animate-in fade-in duration-150">
                 <div>
                   <span className="font-medium text-gray-200">{currentMasterItem.description}</span>
                   <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-400 font-mono">
-                    <span>Category: <strong className="text-gray-300">{currentMasterItem.category === 'RM' ? 'Raw Material' : 'Production Supply'}</strong></span>
+                    <span>Type: <strong className="text-gray-300">{currentMasterItem.materialType || 'RM'}</strong></span>
+                    <span>•</span>
+                    <span>Category: <strong className="text-gray-300">{currentMasterItem.category || 'Box'}</strong></span>
                     <span>•</span>
                     <span>Status: <strong className="text-gray-300">{currentMasterItem.status}</strong></span>
                     {currentMasterItem.unit && (
@@ -390,33 +625,61 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
           {/* Section 2: Registration Authority & Metadata */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                Registered By (Full Name) <span className="text-red-400">*</span>
+              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-cyan-400" />
+                  Registered By
+                </span>
+                <span className="text-[10px] font-normal text-gray-400 flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-gray-500" />
+                  Auto-filled / Locked
+                </span>
               </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. Juan Dela Cruz (QA Specialist)"
-                value={registeredBy}
-                onChange={(e) => setRegisteredBy(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-medium"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  readOnly
+                  tabIndex={-1}
+                  value={registeredBy}
+                  className="w-full text-xs pl-3 pr-24 py-2 bg-[#141414] border border-[#333] text-cyan-300 font-mono font-medium rounded-lg focus:outline-hidden cursor-not-allowed select-all opacity-95"
+                />
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded bg-[#202020] border border-[#333] text-[10px] text-gray-400 font-mono pointer-events-none">
+                  <Lock className="w-2.5 h-2.5 text-gray-400" />
+                  <span>Short Name</span>
+                </div>
+              </div>
               <p className="text-[11px] text-gray-500 mt-1">
-                Records the authorized inspector who logged this sample.
+                Auto-filled with the Short Name of the currently logged-in account.
               </p>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono">
-                Registration Date <span className="text-red-400">*</span>
+              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                  Registration Date
+                </span>
+                <span className="text-[10px] font-normal text-gray-400 flex items-center gap-1">
+                  <Lock className="w-3 h-3 text-gray-500" />
+                  Auto-filled / Locked
+                </span>
               </label>
-              <input
-                type="date"
-                required
-                value={registrationDate}
-                onChange={(e) => setRegistrationDate(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-mono"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  readOnly
+                  tabIndex={-1}
+                  value={registrationDate}
+                  className="w-full text-xs pl-3 pr-20 py-2 bg-[#141414] border border-[#333] text-blue-300 font-mono font-medium rounded-lg focus:outline-hidden cursor-not-allowed select-all opacity-95"
+                />
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded bg-[#202020] border border-[#333] text-[10px] text-gray-400 font-mono pointer-events-none">
+                  <Lock className="w-2.5 h-2.5 text-gray-400" />
+                  <span>Date</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Auto-assigned system date on sample registration.
+              </p>
             </div>
           </div>
 
@@ -448,63 +711,17 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
             />
           </div>
 
-          {/* Dynamic Modular Custom Fields */}
-          {customFieldDefs.length > 0 && (
-            <div className="bg-[#141414] p-4 rounded-xl border border-[#222] space-y-3">
-              <div className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">
-                Extended Schema Attributes
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {customFieldDefs.map((cf) => {
-                  const val = customFields[cf.key] ?? cf.defaultValue ?? '';
-                  if (cf.type === 'boolean') {
-                    return (
-                      <div key={cf.id} className="flex items-center gap-2 pt-2">
-                        <input
-                          type="checkbox"
-                          id={`cf-${cf.key}`}
-                          checked={Boolean(val)}
-                          onChange={(e) => handleCustomFieldChange(cf.key, e.target.checked)}
-                          className="w-4 h-4 text-blue-600 rounded-sm bg-[#1A1A1A] border-[#333] focus:ring-blue-500"
-                        />
-                        <label htmlFor={`cf-${cf.key}`} className="text-xs font-medium text-gray-300">
-                          {cf.label}
-                        </label>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={cf.id}>
-                      <label className="block text-xs font-semibold text-gray-300 mb-1">
-                        {cf.label}
-                      </label>
-                      <input
-                        type={cf.type === 'number' ? 'number' : 'text'}
-                        value={val}
-                        onChange={(e) => handleCustomFieldChange(cf.key, e.target.value)}
-                        className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Section 3: Multiple Sample Photos & Print Configuration */}
+          {/* Section 3: Multiple Sample Photos & Visual Attachments */}
           <div className="bg-[#141414] p-4 rounded-xl border border-[#222] space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#222] pb-3">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-mono font-bold text-gray-300 uppercase tracking-wider">
-                    2. Reference Photos & Print Setup ({photos.length})
-                  </span>
-                  <span className="text-[11px] font-mono bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">
-                    {printPhotosCount} Included in Print
+                    2. Reference Specimen Photos ({photos.length})
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Upload multiple reference angles. Check the 🖨️ box on each photo to configure what pictures print.
+                  Upload visual inspection reference photos and specimen angles for digital quality archive.
                 </p>
               </div>
 
@@ -519,31 +736,6 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
                 </button>
               </div>
             </div>
-
-            {/* Print Layout Preference */}
-            {photos.length > 0 && (
-              <div className="bg-[#1A1A1A] p-3 rounded-lg border border-[#2A2A2A] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <Printer className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <div>
-                    <span className="font-semibold text-gray-200">Default Print Card Photo Layout:</span>
-                    <p className="text-[11px] text-gray-400">Controls how chosen photos appear on the physical inspection sheet.</p>
-                  </div>
-                </div>
-
-                <select
-                  value={printLayout}
-                  onChange={(e) => setPrintLayout(e.target.value as PrintLayoutType)}
-                  className="bg-[#141414] border border-[#333] text-gray-200 text-xs px-2.5 py-1.5 rounded-lg focus:outline-hidden focus:border-blue-500 font-mono cursor-pointer"
-                >
-                  <option value="HERO_SINGLE">Single Hero Photo (Primary)</option>
-                  <option value="DUAL_COMPARISON">Dual Comparison (Standard vs Defect)</option>
-                  <option value="GRID_FOUR">Multi-Photo Grid (Up to 4)</option>
-                  <option value="ALL_PHOTOS">All Included Photos</option>
-                  <option value="SPECS_ONLY">No Photos (Specifications Only)</option>
-                </select>
-              </div>
-            )}
 
             {/* Drag & Drop Multi-Image Zone */}
             <div
@@ -567,17 +759,13 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
               </div>
             </div>
 
-            {/* Multi-Photo Grid with Granular Print Controls */}
+            {/* Multi-Photo Grid */}
             {photos.length > 0 && (
               <div className="space-y-3 pt-1">
                 {photos.map((photo, idx) => (
                   <div
                     key={photo.id}
-                    className={`p-3 rounded-lg border transition-all flex flex-col sm:flex-row items-start gap-3 ${
-                      photo.includeInPrint
-                        ? 'bg-[#181818] border-[#333]'
-                        : 'bg-[#121212] border-[#252525] opacity-75'
-                    }`}
+                    className="p-3 rounded-lg border border-[#2A2A2A] bg-[#181818] transition-all flex flex-col sm:flex-row items-start gap-3"
                   >
                     {/* Thumbnail & Badges */}
                     <div className="relative shrink-0 w-full sm:w-28 h-24 bg-[#0A0A0A] rounded-lg border border-[#2A2A2A] overflow-hidden group">
@@ -589,15 +777,6 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
                       {photo.isPrimary && (
                         <div className="absolute top-1.5 left-1.5 bg-amber-500 text-black px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 shadow-sm">
                           <Star className="w-2.5 h-2.5 fill-black" /> Primary
-                        </div>
-                      )}
-                      {photo.includeInPrint ? (
-                        <div className="absolute bottom-1.5 right-1.5 bg-emerald-950/90 text-emerald-400 border border-emerald-800/80 px-1.5 py-0.5 rounded text-[9px] font-mono flex items-center gap-1">
-                          <Printer className="w-2.5 h-2.5" /> Prints
-                        </div>
-                      ) : (
-                        <div className="absolute bottom-1.5 right-1.5 bg-gray-900/90 text-gray-400 border border-gray-700/80 px-1.5 py-0.5 rounded text-[9px] font-mono">
-                          Digital Only
                         </div>
                       )}
                     </div>
@@ -614,7 +793,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
                           </span>
                         </div>
 
-                        {/* Print Toggle & Primary Star */}
+                        {/* Primary Star & Remove */}
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
@@ -628,20 +807,6 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
                           >
                             <Star className={`w-3 h-3 ${photo.isPrimary ? 'fill-amber-400 text-amber-400' : ''}`} />
                             <span>{photo.isPrimary ? 'Primary Image' : 'Set Primary'}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleToggleIncludeInPrint(photo.id)}
-                            className={`px-2 py-1 rounded text-xs flex items-center gap-1.5 font-medium transition-colors ${
-                              photo.includeInPrint
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                : 'bg-[#222] text-gray-400 hover:text-emerald-300 border border-[#333]'
-                            }`}
-                            title="Toggle whether this image appears in physical printout"
-                          >
-                            <Printer className="w-3 h-3 text-emerald-400" />
-                            <span>{photo.includeInPrint ? 'Print: Yes' : 'Print: Skip'}</span>
                           </button>
                         </div>
                       </div>

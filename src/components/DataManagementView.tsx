@@ -147,7 +147,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
                 Portable Data Management & Database Storage
               </h2>
               <p className="text-xs text-gray-400 mt-1 max-w-2xl leading-relaxed">
-                Because this application runs as a portable Windows executable, your SQLite database (<code className="text-blue-400 font-mono text-[11px] bg-[#222] px-1.5 py-0.5 rounded border border-[#333]">material_reference.db</code>), photos, and Word templates are kept strictly separate from the EXE. Replacing the EXE will never erase your data.
+                Because this application runs as a portable Windows executable, your SQLite database (<code className="text-blue-400 font-mono text-[11px] bg-[#222] px-1.5 py-0.5 rounded border border-[#333]">material_reference.db</code>), photos, and Word templates are kept strictly separate from the MIRMS.exe binary. Replacing the executable will never erase your data.
               </p>
             </div>
           </div>
@@ -234,7 +234,7 @@ export const DataManagementView: React.FC<DataManagementViewProps> = ({
           <div className="text-xs text-gray-400 space-y-1 leading-relaxed">
             <p><strong className="text-gray-300">Configured Location:</strong> <span className="font-mono text-blue-400">{config.dataDirectory}</span></p>
             <p className="text-[11px] text-gray-500">
-              To migrate to a new computer or USB, copy your portable EXE and the <span className="font-mono text-gray-400">ReferenceTracker_Data</span> folder together.
+              To migrate to a new computer or USB, copy your portable MIRMS.exe and the <span className="font-mono text-gray-400">ReferenceTracker_Data</span> folder together.
             </p>
           </div>
         </div>

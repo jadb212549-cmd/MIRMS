@@ -2,14 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { MasterItem, ReferenceRegistration, AuditLogEntry, AppConfig, NavigationTab, SyncMessage } from './types';
 import { db } from './services/db';
 import { realtimeSync } from './services/realtimeSync';
+import { userService } from './services/userService';
 import { Header } from './components/Header';
 import { DashboardView } from './components/DashboardView';
 import { MasterItemsView } from './components/MasterItemsView';
 import { ReferenceRegistrationsView } from './components/ReferenceRegistrationsView';
-import { ExcelManagerView } from './components/ExcelManagerView';
-import { WordTemplateView } from './components/WordTemplateView';
-import { DataManagementView } from './components/DataManagementView';
-import { AuditTrailView } from './components/AuditTrailView';
+import { AdminDashboardView } from './components/AdminDashboardView';
 import { MasterItemModal } from './components/MasterItemModal';
 import { ReferenceRegistrationModal } from './components/ReferenceRegistrationModal';
 import { ReferenceDetailModal } from './components/ReferenceDetailModal';
@@ -25,6 +23,21 @@ interface ToastNotification {
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<NavigationTab>('DASHBOARD');
+  const [currentUser, setCurrentUser] = useState(userService.getCurrentUser());
+
+  useEffect(() => {
+    const unsubscribe = userService.subscribe(() => {
+      setCurrentUser(userService.getCurrentUser());
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Redirect non-admins away from admin dashboard
+  useEffect(() => {
+    if (currentTab === 'ADMIN_DASHBOARD' && (!currentUser || currentUser.role !== 'admin')) {
+      setCurrentTab('DASHBOARD');
+    }
+  }, [currentUser, currentTab]);
   const [masterItems, setMasterItems] = useState<MasterItem[]>([]);
   const [registrations, setRegistrations] = useState<ReferenceRegistration[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
@@ -160,10 +173,14 @@ export default function App() {
   // Master Item Handlers
   const handleSaveMasterItem = async (itemData: Omit<MasterItem, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
+      let res;
       if (editingMasterItem) {
-        await db.updateMasterItem(editingMasterItem.id, itemData, config.defaultRegisteredBy || 'Admin');
+        res = await db.updateMasterItem(editingMasterItem.id, itemData, config.defaultRegisteredBy || 'Admin');
       } else {
-        await db.createMasterItem(itemData, config.defaultRegisteredBy || 'Admin');
+        res = await db.createMasterItem(itemData, config.defaultRegisteredBy || 'Admin');
+      }
+      if (res && res.success === false) {
+        return { success: false, error: res.error || 'Failed to save master reference item.' };
       }
       await refreshAllData();
       return { success: true };
@@ -180,10 +197,14 @@ export default function App() {
   // Reference Registration Handlers
   const handleSaveRegistration = async (regData: Omit<ReferenceRegistration, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
+      let res;
       if (editingRegistration) {
-        await db.updateRegistration(editingRegistration.id, regData, config.defaultRegisteredBy || 'Admin');
+        res = await db.updateRegistration(editingRegistration.id, regData, config.defaultRegisteredBy || 'Admin');
       } else {
-        await db.createRegistration(regData, config.defaultRegisteredBy || 'Admin');
+        res = await db.createRegistration(regData, config.defaultRegisteredBy || 'Admin');
+      }
+      if (res && res.success === false) {
+        return { success: false, error: res.error || 'Failed to save reference registration.' };
       }
       await refreshAllData();
       return { success: true };
@@ -343,64 +364,19 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'EXCEL_MANAGER' && (
-          <ExcelManagerView
+        {currentTab === 'ADMIN_DASHBOARD' && currentUser?.role === 'admin' && (
+          <AdminDashboardView
+            config={config}
             masterItems={masterItems}
             registrations={registrations}
+            auditLogs={auditLogs}
             onRefreshData={refreshAllData}
+            onConfigChange={handleSaveConfig}
             onNavigateTab={setCurrentTab}
-          />
-        )}
-
-        {currentTab === 'WORD_TEMPLATES' && (
-          <WordTemplateView
-            config={config}
-            masterItems={masterItems}
-            registrations={registrations}
-            onConfigChange={handleSaveConfig}
-          />
-        )}
-
-        {(currentTab === 'DATA_MANAGEMENT' || currentTab === 'SHARED_FOLDER') && (
-          <DataManagementView
-            config={config}
-            masterItems={masterItems}
-            registrations={registrations}
-            onRefreshData={refreshAllData}
-            onConfigChange={handleSaveConfig}
-          />
-        )}
-
-        {currentTab === 'AUDIT_TRAIL' && (
-          <AuditTrailView
-            logs={auditLogs}
-            onRefresh={refreshAllData}
+            initialSubTab={currentTab}
           />
         )}
       </main>
-
-      {/* Footer System Status Bar */}
-      <footer className="h-8 bg-[#161616] border-t border-[#222222] flex items-center justify-between px-4 text-[10px] text-gray-500 select-none">
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5 font-medium text-gray-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-            REF_TRACKER DESKTOP
-          </span>
-          <span className="hidden sm:inline text-gray-600">|</span>
-          <span className="hidden sm:inline font-mono">TARGET: x86_64-pc-windows-msvc</span>
-          <span className="hidden sm:inline text-gray-600">|</span>
-          <span className="hidden md:inline font-mono">DB: SQLite Portable</span>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <span className="flex items-center gap-1.5 text-emerald-400 font-mono">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-            SHARED FOLDER SYNC ACTIVE
-          </span>
-          <span className="text-gray-600">|</span>
-          <span className="font-mono text-gray-400">v1.0.4-stable</span>
-        </div>
-      </footer>
 
       {/* Master Item Create/Edit Modal */}
       <MasterItemModal
@@ -418,7 +394,7 @@ export default function App() {
         onSave={handleSaveRegistration}
         masterItems={masterItems}
         customFieldDefs={config.customFields || []}
-        defaultUser={config.defaultRegisteredBy || 'Juan Dela Cruz'}
+        defaultUser={currentUser ? currentUser.shortName : (config.defaultRegisteredBy || 'JD. Stone')}
         initialMasterItem={regModalMasterItem}
         existingRegistration={editingRegistration}
       />
