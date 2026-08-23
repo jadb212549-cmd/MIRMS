@@ -27,12 +27,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (v24)
+      - name: Setup Node.js (v22 LTS)
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
+
+      - name: Environment Diagnostics
+        run: |
+          node --version
+          npm --version
 
       - name: Install Rust toolchain (x86_64-pc-windows-msvc)
         uses: dtolnay/rust-toolchain@stable
@@ -43,6 +48,11 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+
+      - name: Rust Toolchain Diagnostics
+        run: |
+          rustc --version
+          cargo --version
 
       - name: Install Frontend Dependencies
         run: npm ci
