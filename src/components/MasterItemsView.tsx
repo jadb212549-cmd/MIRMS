@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { MasterItem, ReferenceRegistration, ItemCategory, ItemStatus } from '../types';
 import { Database, Plus, Search, Filter, FileSpreadsheet, ShieldCheck, Edit3, Trash2, ShieldAlert, Calendar, X, Clock, Check, ChevronDown, Sparkles, RefreshCw, Camera, User } from 'lucide-react';
 import { excelService } from '../services/excelService';
+import { userService } from '../services/userService';
 
 interface MasterItemsViewProps {
   masterItems: MasterItem[];
@@ -30,8 +31,18 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
   globalSearchQuery = '',
   onSearchChange
 }) => {
+  const [currentUser, setCurrentUser] = useState(userService.getCurrentUser());
   const [localSearch, setLocalSearch] = useState('');
   const searchTerm = globalSearchQuery || localSearch;
+
+  useEffect(() => {
+    const unsubscribe = userService.subscribe(() => {
+      setCurrentUser(userService.getCurrentUser());
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const isAdmin = currentUser?.role === 'admin';
 
   const handleSearchChange = (val: string) => {
     setLocalSearch(val);
@@ -539,17 +550,19 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                           <button
                             onClick={() => onOpenEditModal(item)}
                             title="Edit Master Item"
-                            className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-[#252525] rounded transition-colors"
+                            className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-[#252525] rounded transition-colors cursor-pointer"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => setItemToDelete(item)}
-                            title="Delete Master Item"
-                            className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => setItemToDelete(item)}
+                              title="Delete Master Item"
+                              className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
 

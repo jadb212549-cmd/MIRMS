@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ReferenceRegistration, MasterItem, AppConfig } from '../types';
+import { ReferenceRegistration, ReferenceRevisionRecord, MasterItem, AppConfig } from '../types';
 import { 
   X, 
   ShieldCheck, 
@@ -14,11 +14,18 @@ import {
   Download, 
   Star, 
   Clock,
-  ExternalLink
+  ExternalLink,
+  History,
+  Eye,
+  ArrowLeftRight
 } from 'lucide-react';
 import { wordService } from '../services/wordService';
 import { InspectionProofModal } from './InspectionProofModal';
+import { RevisionAuditSnapshotModal } from './RevisionAuditSnapshotModal';
+import { RevisionCompareModal } from './RevisionCompareModal';
+import { RevisionAuditDossierModal } from './RevisionAuditDossierModal';
 import { db } from '../services/db';
+import { userService } from '../services/userService';
 
 interface ReferenceDetailModalProps {
   isOpen: boolean;
@@ -39,9 +46,24 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
   onEdit,
   onDelete
 }) => {
+  const [currentUser, setCurrentUser] = useState(userService.getCurrentUser());
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [showInspectionProof, setShowInspectionProof] = useState(false);
   const [isGeneratingDoc, setIsGeneratingDoc] = useState(false);
+  
+  // Auditing & Revision Snapshot Modals
+  const [snapshotRevision, setSnapshotRevision] = useState<ReferenceRevisionRecord | null>(null);
+  const [showDossierModal, setShowDossierModal] = useState(false);
+  const [compareRevisions, setCompareRevisions] = useState<{ revA?: ReferenceRevisionRecord; revB?: ReferenceRevisionRecord } | null>(null);
+
+  React.useEffect(() => {
+    const unsubscribe = userService.subscribe(() => {
+      setCurrentUser(userService.getCurrentUser());
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const isAdmin = currentUser?.role === 'admin';
 
   if (!isOpen || !registration) return null;
 
@@ -77,6 +99,17 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
                 <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-mono">
                   {masterItem?.category === 'RM' ? 'Raw Material' : 'Production Supply'}
                 </span>
+                <span
+                  className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                    registration.status === 'APPROVED'
+                      ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                      : registration.status === 'PENDING_APPROVAL'
+                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                      : 'bg-red-500/15 text-red-400 border border-red-500/30'
+                  }`}
+                >
+                  {registration.status || 'APPROVED'}
+                </span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5 truncate max-w-md">
                 {masterItem?.description || 'Registered Material Reference Sample'}
@@ -88,7 +121,7 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
             <button
               onClick={() => onEdit(registration)}
               className="p-1.5 text-gray-400 hover:text-white hover:bg-[#222] rounded-md transition-colors"
-              title="Edit Registration"
+              title="Edit Reference (Submit Revision)"
             >
               <Edit3 className="w-4 h-4" />
             </button>
@@ -103,6 +136,35 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
 
         {/* Content Body */}
         <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+          {/* Pending Revision Alert Banner */}
+          {registration.hasPendingRevision && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3 animate-in fade-in duration-150">
+              <div className="p-2 bg-amber-500/20 text-amber-400 rounded-lg shrink-0 mt-0.5">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div className="space-y-1 flex-1 text-xs">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-amber-300 font-mono text-sm">
+                    Proposed Revision Pending Admin Approval
+                  </h4>
+                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-amber-500 text-black">
+                    {registration.pendingRevision?.revisionCode || 'Next Revision'}
+                  </span>
+                </div>
+                <p className="text-gray-300 leading-relaxed">
+                  A new revision has been submitted by <strong className="text-amber-200">{registration.pendingRevision?.submittedBy || 'QA Staff'}</strong> on{' '}
+                  <span className="font-mono text-gray-400">{registration.pendingRevision ? new Date(registration.pendingRevision.submittedAt).toLocaleString() : 'recently'}</span>.
+                  The current official version (<strong className="text-emerald-400">{registration.revision}</strong>) remains in effect until an Administrator reviews and approves the revision.
+                </p>
+                {registration.pendingRevision?.revisionNotes && (
+                  <div className="mt-2 p-2.5 bg-[#141414] rounded-lg border border-amber-500/20 text-gray-300 font-mono text-[11px]">
+                    <span className="text-amber-400 font-bold">Revision Justification: </span>
+                    "{registration.pendingRevision.revisionNotes}"
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           {/* Metadata Badges Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-[#141414] p-3.5 rounded-xl border border-[#222] text-xs">
             <div>
@@ -170,46 +232,113 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
 
           {/* Revision History & Simplified Preview of Last Revision */}
           <div className="border border-[#222] rounded-xl p-4 bg-[#141414] space-y-3">
-            <div className="flex items-center justify-between">
-              <h4 className="text-xs font-mono font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5 text-purple-400" />
-                <span>Revision History ({registration.revisionHistory?.length || 0})</span>
-              </h4>
-              <span className="text-[11px] font-mono text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
-                Current: {registration.revision}
-              </span>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-mono font-bold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                  <History className="w-3.5 h-3.5 text-purple-400" />
+                  <span>
+                    Revision & Audit Lifecycle ({registration.versions?.length || registration.revisionHistory?.length || 1})
+                  </span>
+                </h4>
+                <span className="text-[11px] font-mono text-purple-400 font-semibold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                  Official: {registration.revision} (v{registration.currentVersionNumber || 1})
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {(registration.versions && registration.versions.length > 1) && (
+                  <button
+                    onClick={() => setCompareRevisions({ revA: registration.versions![registration.versions!.length - 2], revB: registration.versions![registration.versions!.length - 1] })}
+                    className="flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 px-2.5 py-1 rounded-lg border border-blue-500/20 transition-colors cursor-pointer"
+                  >
+                    <ArrowLeftRight className="w-3 h-3" />
+                    <span>Compare Diff</span>
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowDossierModal(true)}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-purple-300 hover:text-purple-200 bg-purple-500/15 hover:bg-purple-500/25 px-2.5 py-1 rounded-lg border border-purple-500/30 transition-colors cursor-pointer"
+                >
+                  <Eye className="w-3 h-3" />
+                  <span>Full Audit Dossier</span>
+                </button>
+              </div>
             </div>
 
-            {/* Last Revision Preview */}
-            {registration.revisionHistory && registration.revisionHistory.length > 0 ? (
+            {/* Versions List */}
+            {registration.versions && registration.versions.length > 0 ? (
               <div className="space-y-2">
-                <div className="bg-[#1C1A24] p-3 rounded-lg border border-purple-500/30">
-                  <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-purple-300 font-mono font-bold flex items-center gap-1">
-                      <span>Last Revision Preview:</span>
-                      <span className="bg-purple-500/20 text-purple-200 px-1.5 py-0.5 rounded text-[10px]">
-                        {registration.revisionHistory[0].revision}
-                      </span>
-                    </span>
-                    <span className="text-[10px] text-gray-400 font-mono">
-                      {registration.revisionHistory[0].date} • by {registration.revisionHistory[0].author}
-                    </span>
-                  </div>
-                  {registration.revisionHistory[0].changeSummary && (
-                    <p className="text-[11px] text-purple-200 font-mono mb-1">
-                      {registration.revisionHistory[0].changeSummary}
-                    </p>
-                  )}
-                  {registration.revisionHistory[0].specification && (
-                    <p className="text-xs text-gray-300 line-clamp-2 bg-[#121118] p-2 rounded border border-purple-900/30 font-sans mt-1">
-                      <span className="text-gray-500 font-mono text-[10px] block">Previous Specification:</span>
-                      {registration.revisionHistory[0].specification}
-                    </p>
-                  )}
-                </div>
+                <div className="divide-y divide-[#222]">
+                  {registration.versions.map((ver, idx) => {
+                    const isOfficial = ver.revisionCode === registration.revision && ver.status === 'APPROVED';
+                    const prevVer = registration.versions![idx + 1];
+                    return (
+                      <div key={ver.id} className="py-2.5 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:bg-[#181818]/60 p-2 rounded-lg transition-colors">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono font-bold text-gray-100 bg-[#222] px-2 py-0.5 rounded text-[11px] border border-[#333]">
+                              v{ver.versionNumber}: {ver.revisionCode}
+                            </span>
+                            <span
+                              className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                                ver.status === 'APPROVED'
+                                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                                  : ver.status === 'PENDING_APPROVAL'
+                                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                                  : 'bg-red-500/15 text-red-400 border border-red-500/30'
+                              }`}
+                            >
+                              {ver.status}
+                            </span>
+                            {isOfficial && (
+                              <span className="text-[9px] font-mono font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.5 rounded">
+                                ACTIVE BASELINE
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-gray-400 text-[11px]">
+                            {ver.revisionNotes || ver.changeSummary || 'Baseline reference registration'}
+                          </p>
+                        </div>
 
-                {/* Simplified Revision Timeline */}
-                <div className="pt-2 divide-y divide-[#222]">
+                        <div className="flex items-center gap-3 shrink-0 sm:self-center">
+                          <div className="text-right text-[10px] text-gray-500 font-mono hidden md:block">
+                            <div>Sub: {ver.submittedBy} ({new Date(ver.submittedAt).toLocaleDateString()})</div>
+                            {ver.approvedBy && (
+                              <div className="text-emerald-400">Appr: {ver.approvedBy}</div>
+                            )}
+                            {ver.rejectedBy && (
+                              <div className="text-red-400">Rej: {ver.rejectedBy}</div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {prevVer && (
+                              <button
+                                onClick={() => setCompareRevisions({ revA: prevVer, revB: ver })}
+                                title="Compare this version with previous"
+                                className="p-1 text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded transition-colors"
+                              >
+                                <ArrowLeftRight className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setSnapshotRevision(ver)}
+                              className="flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-gray-300 hover:text-white bg-[#222] hover:bg-[#2A2A2A] border border-[#333] rounded transition-colors"
+                            >
+                              <Eye className="w-3 h-3 text-purple-400" />
+                              <span>Inspect</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : registration.revisionHistory && registration.revisionHistory.length > 0 ? (
+              <div className="space-y-2">
+                <div className="divide-y divide-[#222]">
                   {registration.revisionHistory.map((rev, idx) => (
                     <div key={rev.id || idx} className="py-2 text-xs flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -377,20 +506,23 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={async () => {
-                  if (confirm(`Delete reference sample registration for ${registration.productCode}?`)) {
-                    await onDelete(registration.id);
-                    onClose();
-                  }
-                }}
-                className="flex items-center gap-1 text-xs font-semibold text-red-400 hover:text-red-300 px-3 py-2 hover:bg-red-500/10 rounded-lg transition-colors"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Registration</span>
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    if (confirm(`Delete reference sample registration for ${registration.productCode}?`)) {
+                      await onDelete(registration.id);
+                      onClose();
+                    }
+                  }}
+                  className="flex items-center gap-1 text-xs font-semibold text-red-400 hover:text-red-300 px-3 py-2 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                  title="Admin Only: Delete Reference Registration"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Registration</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -417,6 +549,40 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
         masterItem={masterItem}
         config={config}
       />
+
+      {/* Revision Snapshot Audit Modal */}
+      {snapshotRevision && (
+        <RevisionAuditSnapshotModal
+          registration={registration}
+          revision={snapshotRevision}
+          masterItem={masterItem}
+          onClose={() => setSnapshotRevision(null)}
+          onCompareWithAnother={(rev) => {
+            setSnapshotRevision(null);
+            setCompareRevisions({ revA: rev, revB: registration.versions?.[registration.versions.length - 1] });
+          }}
+        />
+      )}
+
+      {/* Revision Side-by-Side Diff Modal */}
+      {compareRevisions && (
+        <RevisionCompareModal
+          registration={registration}
+          masterItem={masterItem}
+          initialRevA={compareRevisions.revA}
+          initialRevB={compareRevisions.revB}
+          onClose={() => setCompareRevisions(null)}
+        />
+      )}
+
+      {/* Full Revision Audit Dossier Modal */}
+      {showDossierModal && (
+        <RevisionAuditDossierModal
+          registration={registration}
+          masterItem={masterItem}
+          onClose={() => setShowDossierModal(false)}
+        />
+      )}
     </div>
   );
 };

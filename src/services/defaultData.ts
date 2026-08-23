@@ -444,7 +444,9 @@ export const DEFAULT_CONFIG: AppConfig = {
   customFields: DEFAULT_CUSTOM_FIELDS,
   wordTemplateName: 'Official_Material_Reference_Template_v2.docx',
   wordDocPlaceholders: DEFAULT_WORD_PLACEHOLDERS,
-  portableMode: true
+  portableMode: true,
+  adminCanAutoApproveOwnRevisions: true,
+  requireAdminApprovalForNewRegistrations: false
 };
 
 export const INITIAL_MASTER_ITEMS: MasterItem[] = [
@@ -573,6 +575,57 @@ export const INITIAL_REGISTRATIONS: ReferenceRegistration[] = [
     specification: 'ASTM A240 / ASME SA240 standard. Chemical composition: Cr 18.2%, Ni 8.1%, C <= 0.07%. Surface roughness Ra <= 0.4um. Mill test certificate attached. Verified non-magnetic and passivated.',
     remarks: 'Approved as gold standard visual reference for batch acceptance testing in stamping line.',
     revision: 'Rev 01',
+    status: 'APPROVED',
+    currentVersionNumber: 1,
+    hasPendingRevision: false,
+    versions: [
+      {
+        id: 'ver-001-1',
+        referenceId: 'ref-001',
+        versionNumber: 1,
+        revisionCode: 'Rev 01',
+        status: 'APPROVED',
+        masterItemId: 'item-001',
+        productCode: 'RM-SS-304-001',
+        materialType: 'RM',
+        category: 'Sheet Metal',
+        registrationDate: '2026-08-20',
+        registeredBy: 'Juan Dela Cruz',
+        supplier: 'Apex Metal Alloys Inc.',
+        specification: 'ASTM A240 / ASME SA240 standard. Chemical composition: Cr 18.2%, Ni 8.1%, C <= 0.07%. Surface roughness Ra <= 0.4um. Mill test certificate attached. Verified non-magnetic and passivated.',
+        remarks: 'Approved as gold standard visual reference for batch acceptance testing in stamping line.',
+        customFields: {
+          storageLocation: 'Room 3 - Rack B-04',
+          countryOfOrigin: 'Japan',
+          isHazardous: false,
+          shelfLifeMonths: 60
+        },
+        photos: [
+          {
+            id: 'photo-1',
+            fileName: 'stainless_steel_sample_grain.png',
+            fileSize: 45200,
+            dataUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23cbd5e1"/><rect x="40" y="40" width="320" height="220" fill="%2394a3b8" rx="8"/><line x1="60" y1="80" x2="340" y2="80" stroke="%23f8fafc" stroke-width="3"/><line x1="60" y1="120" x2="340" y2="120" stroke="%23f8fafc" stroke-width="2"/><line x1="60" y1="160" x2="340" y2="160" stroke="%23f8fafc" stroke-width="2"/><line x1="60" y1="200" x2="340" y2="200" stroke="%23f8fafc" stroke-width="3"/><text x="200" y="240" font-family="sans-serif" font-size="14" fill="%230f172a" text-anchor="middle" font-weight="bold">RM-SS-304-001 MASTER SPECIMEN</text></svg>',
+            caption: 'Top surface 2B finish specular inspection with micrometer gauge calibration',
+            uploadedAt: '2026-08-20T08:30:00.000Z'
+          }
+        ],
+        attachments: [
+          {
+            id: 'att-1',
+            fileName: 'Mill_Test_Cert_EN10204_3.1.pdf',
+            fileSize: 245800,
+            fileType: 'application/pdf',
+            uploadedAt: '2026-08-20T08:35:00.000Z'
+          }
+        ],
+        submittedBy: 'Juan Dela Cruz',
+        submittedAt: '2026-08-20T08:30:00.000Z',
+        approvedBy: 'Sys Admin',
+        approvedAt: '2026-08-20T08:35:00.000Z',
+        changeSummary: 'Initial base registration and official approval'
+      }
+    ],
     customFields: {
       storageLocation: 'Room 3 - Rack B-04',
       countryOfOrigin: 'Japan',
@@ -615,6 +668,57 @@ export const INITIAL_REGISTRATIONS: ReferenceRegistration[] = [
     specification: 'Melt Flow Index (MFI) 0.35 g/10min at 190C/2.16kg. Density 0.954 g/cm3. Tensile strength yield 26 MPa. ISO 1183 and ASTM D1238 compliant.',
     remarks: 'Lot #PG-20260815 physical pellet sample registered for color index and moisture analysis testing.',
     revision: 'Rev 01',
+    status: 'APPROVED',
+    currentVersionNumber: 1,
+    hasPendingRevision: false,
+    versions: [
+      {
+        id: 'ver-002-1',
+        referenceId: 'ref-002',
+        versionNumber: 1,
+        revisionCode: 'Rev 01',
+        status: 'APPROVED',
+        masterItemId: 'item-003',
+        productCode: 'RM-POLY-HDPE-NAT',
+        materialType: 'RM',
+        category: 'Resin & Polymer',
+        registrationDate: '2026-08-19',
+        registeredBy: 'Maria Santos',
+        supplier: 'Petrochem Global Solutions',
+        specification: 'Melt Flow Index (MFI) 0.35 g/10min at 190C/2.16kg. Density 0.954 g/cm3. Tensile strength yield 26 MPa. ISO 1183 and ASTM D1238 compliant.',
+        remarks: 'Lot #PG-20260815 physical pellet sample registered for color index and moisture analysis testing.',
+        customFields: {
+          storageLocation: 'Desiccator Cabinet C-1',
+          countryOfOrigin: 'Singapore',
+          isHazardous: false,
+          shelfLifeMonths: 24
+        },
+        photos: [
+          {
+            id: 'photo-2',
+            fileName: 'hdpe_pellet_sample.png',
+            fileSize: 38400,
+            dataUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23f1f5f9"/><circle cx="120" cy="120" r="30" fill="%23e2e8f0" stroke="%2394a3b8" stroke-width="2"/><circle cx="200" cy="110" r="28" fill="%23e2e8f0" stroke="%2394a3b8" stroke-width="2"/><circle cx="280" cy="130" r="32" fill="%23e2e8f0" stroke="%2394a3b8" stroke-width="2"/><circle cx="160" cy="180" r="30" fill="%23e2e8f0" stroke="%2394a3b8" stroke-width="2"/><circle cx="240" cy="190" r="29" fill="%23e2e8f0" stroke="%2394a3b8" stroke-width="2"/><text x="200" y="260" font-family="sans-serif" font-size="14" fill="%23334155" text-anchor="middle" font-weight="bold">HDPE Virgin Pellets - Natural</text></svg>',
+            caption: 'Pellet size uniformity inspection under stereo microscope',
+            uploadedAt: '2026-08-19T10:15:00.000Z'
+          }
+        ],
+        attachments: [
+          {
+            id: 'att-2',
+            fileName: 'TDS_HDPE_Natural_Injection.pdf',
+            fileSize: 189200,
+            fileType: 'application/pdf',
+            uploadedAt: '2026-08-19T10:20:00.000Z'
+          }
+        ],
+        submittedBy: 'Maria Santos',
+        submittedAt: '2026-08-19T10:15:00.000Z',
+        approvedBy: 'Sys Admin',
+        approvedAt: '2026-08-19T10:20:00.000Z',
+        changeSummary: 'Initial base registration and official approval'
+      }
+    ],
     customFields: {
       storageLocation: 'Desiccator Cabinet C-1',
       countryOfOrigin: 'Singapore',
@@ -656,6 +760,49 @@ export const INITIAL_REGISTRATIONS: ReferenceRegistration[] = [
     specification: 'Thickness palm 0.10mm, finger 0.14mm. Tensile strength >= 14 MPa before aging. Pinhole AQL 1.5. EN 455 & ASTM D6319 certified.',
     remarks: 'Approved standard reference sample for Cleanroom Class 10,000 operators.',
     revision: 'Rev 01',
+    status: 'APPROVED',
+    currentVersionNumber: 1,
+    hasPendingRevision: false,
+    versions: [
+      {
+        id: 'ver-003-1',
+        referenceId: 'ref-003',
+        versionNumber: 1,
+        revisionCode: 'Rev 01',
+        status: 'APPROVED',
+        masterItemId: 'item-006',
+        productCode: 'PS-NIT-GLOVE-L',
+        materialType: 'PS',
+        category: 'Gloves & PPE',
+        registrationDate: '2026-08-18',
+        registeredBy: 'Juan Dela Cruz',
+        supplier: 'SafetyPro Supplies Ltd.',
+        specification: 'Thickness palm 0.10mm, finger 0.14mm. Tensile strength >= 14 MPa before aging. Pinhole AQL 1.5. EN 455 & ASTM D6319 certified.',
+        remarks: 'Approved standard reference sample for Cleanroom Class 10,000 operators.',
+        customFields: {
+          storageLocation: 'Supply Reference Room R1',
+          countryOfOrigin: 'Malaysia',
+          isHazardous: false,
+          shelfLifeMonths: 36
+        },
+        photos: [
+          {
+            id: 'photo-3',
+            fileName: 'nitrile_glove_specimen.png',
+            fileSize: 41200,
+            dataUrl: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%230284c7" rx="10"/><text x="200" y="140" font-family="sans-serif" font-size="22" fill="%23ffffff" text-anchor="middle" font-weight="bold">NITRILE GLOVE L</text><text x="200" y="180" font-family="sans-serif" font-size="14" fill="%23e0f2fe" text-anchor="middle">AQL 1.5 - Powder Free</text></svg>',
+            caption: 'Visual inspection of cuff beading and micro-textured fingertip grip',
+            uploadedAt: '2026-08-18T14:30:00.000Z'
+          }
+        ],
+        attachments: [],
+        submittedBy: 'Juan Dela Cruz',
+        submittedAt: '2026-08-18T14:30:00.000Z',
+        approvedBy: 'Sys Admin',
+        approvedAt: '2026-08-18T15:00:00.000Z',
+        changeSummary: 'Initial base registration and official approval'
+      }
+    ],
     customFields: {
       storageLocation: 'Supply Reference Room R1',
       countryOfOrigin: 'Malaysia',

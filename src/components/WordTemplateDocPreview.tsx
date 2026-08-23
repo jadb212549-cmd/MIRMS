@@ -827,7 +827,7 @@ export const WordTemplateDocPreview: React.FC<WordTemplateDocPreviewProps> = ({
                           />
                         </div>
                         <span className="text-[10px] font-semibold text-slate-700 mt-1 truncate w-full text-center">
-                          {photo.category ? `[${photo.category}] ` : ''}
+                          {(photo.photoCategory || photo.category) ? `[${photo.photoCategory || photo.category}] ` : ''}
                           {photo.caption || `Photo #${idx + 1}`}
                         </span>
                       </div>

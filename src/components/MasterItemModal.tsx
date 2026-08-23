@@ -8,14 +8,19 @@ interface MasterItemModalProps {
   onClose: () => void;
   onSave: (item: Omit<MasterItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<{ success: boolean; error?: string }>;
   initialItem?: MasterItem | null;
+  existingItem?: MasterItem | null;
+  existingProductCodes?: string[];
 }
 
 export const MasterItemModal: React.FC<MasterItemModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  initialItem
+  initialItem,
+  existingItem,
+  existingProductCodes
 }) => {
+  const targetItem = existingItem !== undefined ? existingItem : initialItem;
   const [productCode, setProductCode] = useState('');
   const [description, setDescription] = useState('');
   const [materialType, setMaterialType] = useState<MaterialType>('RM');
@@ -39,15 +44,15 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
   }, [isOpen]);
 
   useEffect(() => {
-    if (initialItem) {
-      setProductCode(initialItem.productCode);
-      setDescription(initialItem.description);
-      setMaterialType(initialItem.materialType || 'RM');
-      setCategory(initialItem.category || 'Box');
+    if (targetItem) {
+      setProductCode(targetItem.productCode);
+      setDescription(targetItem.description);
+      setMaterialType(targetItem.materialType || 'RM');
+      setCategory(targetItem.category || 'Box');
       setIsCustomCategory(false);
       setCustomCategoryName('');
-      setStatus(initialItem.status);
-      setUnit(initialItem.unit || '');
+      setStatus(targetItem.status);
+      setUnit(targetItem.unit || '');
     } else {
       setProductCode('');
       setDescription('');
@@ -59,7 +64,7 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
       setUnit('');
     }
     setError(null);
-  }, [initialItem, isOpen]);
+  }, [targetItem, isOpen]);
 
   if (!isOpen) return null;
 

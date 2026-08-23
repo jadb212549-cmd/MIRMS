@@ -40,16 +40,23 @@ import {
   Lock,
   ExternalLink,
   Clock,
-  Sparkles
+  Sparkles,
+  LayoutTemplate,
+  Printer
 } from 'lucide-react';
 import { realtimeSync } from '../services/realtimeSync';
 import { tauriBridge } from '../services/tauriService';
 import { db } from '../services/db';
 import { userService } from '../services/userService';
+import { excelService } from '../services/excelService';
+import { DEFAULT_CATEGORIES } from '../services/defaultData';
 import { CustomFieldsManagerModal } from './CustomFieldsManagerModal';
 import { ExcelManagerView } from './ExcelManagerView';
 import { WordTemplateView } from './WordTemplateView';
+import { FormTemplateManagementView } from './FormTemplateManagementView';
 import { AuditTrailView } from './AuditTrailView';
+import { RevisionApprovalQueueView } from './RevisionApprovalQueueView';
+import { CategoriesManagerView } from './CategoriesManagerView';
 
 interface AdminDashboardViewProps {
   config: AppConfig;
@@ -74,20 +81,42 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 }) => {
   // Active sub-section within the Admin Dashboard
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<
-    'OVERVIEW' | 'SHARED_SYNC' | 'EXCEL' | 'WORD_TEMPLATES' | 'CUSTOM_FIELDS' | 'AUDIT' | 'BACKUP' | 'SETTINGS' | 'USER_ACCESS'
+    'OVERVIEW' | 'APPROVAL_QUEUE' | 'CATEGORIES' | 'FORM_TEMPLATES' | 'SHARED_SYNC' | 'EXCEL' | 'WORD_TEMPLATES' | 'CUSTOM_FIELDS' | 'AUDIT' | 'BACKUP' | 'SETTINGS' | 'USER_ACCESS'
   >(
-    initialSubTab === 'SHARED_FOLDER'
+    initialSubTab === 'APPROVAL_QUEUE'
+      ? 'APPROVAL_QUEUE'
+      : initialSubTab === 'CATEGORIES'
+      ? 'CATEGORIES'
+      : initialSubTab === 'FORM_TEMPLATES'
+      ? 'FORM_TEMPLATES'
+      : initialSubTab === 'SHARED_FOLDER'
       ? 'SHARED_SYNC'
       : initialSubTab === 'EXCEL_MANAGER'
       ? 'EXCEL'
       : initialSubTab === 'WORD_TEMPLATES'
-      ? 'WORD_TEMPLATES'
+      ? 'FORM_TEMPLATES'
       : initialSubTab === 'AUDIT_TRAIL'
       ? 'AUDIT'
       : initialSubTab === 'DATA_MANAGEMENT'
       ? 'BACKUP'
       : 'OVERVIEW'
   );
+
+  // Calculate pending revisions count across reference registry
+  const pendingRevisionsCount = React.useMemo(() => {
+    let count = 0;
+    for (const reg of registrations) {
+      if (reg.status === 'PENDING_APPROVAL') count++;
+      if (reg.versions) {
+        for (const rev of reg.versions) {
+          if (rev.status === 'PENDING_APPROVAL' && rev.versionNumber > 1) {
+            count++;
+          }
+        }
+      }
+    }
+    return count;
+  }, [registrations]);
 
   // User access registration states
   const [allowedIds, setAllowedIds] = useState(userService.getAllowedIds());
@@ -470,6 +499,57 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveAdminSubTab('APPROVAL_QUEUE')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+            activeAdminSubTab === 'APPROVAL_QUEUE'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'bg-[#141414] text-gray-400 hover:text-white hover:bg-[#1C1C1C] border border-[#222]'
+          }`}
+        >
+          <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+          <span>Approval Queue</span>
+          {pendingRevisionsCount > 0 ? (
+            <span className="px-1.5 py-0.2 rounded-full font-mono bg-amber-500 text-black text-[10px] font-bold animate-pulse">
+              {pendingRevisionsCount} Pending
+            </span>
+          ) : (
+            <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-emerald-500/20 text-emerald-400 font-semibold">
+              All Clear
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveAdminSubTab('CATEGORIES')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+            activeAdminSubTab === 'CATEGORIES'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'bg-[#141414] text-gray-400 hover:text-white hover:bg-[#1C1C1C] border border-[#222]'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5 text-amber-400" />
+          <span>Categories Management</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-amber-500/20 text-amber-300 font-semibold">
+            {config.categories?.length ?? DEFAULT_CATEGORIES.length} Categories
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveAdminSubTab('FORM_TEMPLATES')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+            activeAdminSubTab === 'FORM_TEMPLATES'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-[#141414] text-gray-400 hover:text-white hover:bg-[#1C1C1C] border border-[#222]'
+          }`}
+        >
+          <LayoutTemplate className="w-3.5 h-3.5 text-blue-400" />
+          <span>Form Templates (Ref & Slip)</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-blue-500/20 text-blue-300 font-semibold">
+            Custom Forms
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveAdminSubTab('SHARED_SYNC')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
             activeAdminSubTab === 'SHARED_SYNC'
@@ -574,6 +654,64 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         <div className="space-y-6 animate-in fade-in duration-150">
           {/* Quick Launch Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {/* Module 0: Revision Approval Workflow Queue */}
+            <div
+              onClick={() => setActiveAdminSubTab('APPROVAL_QUEUE')}
+              className="bg-[#141414] hover:bg-[#191919] border border-[#222] hover:border-amber-500/40 rounded-2xl p-5 shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl group-hover:scale-105 transition-transform">
+                    <ShieldCheck className="w-6 h-6" />
+                  </div>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
+                    pendingRevisionsCount > 0
+                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  }`}>
+                    {pendingRevisionsCount > 0 ? `${pendingRevisionsCount} Pending` : 'All Reviewed'}
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                  Revision Approval Queue
+                </h3>
+                <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                  Strict quality governance: review proposed revisions, compare specification diffs side-by-side, approve official version promotions, or reject changes with mandatory feedback.
+                </p>
+              </div>
+              <div className="mt-5 pt-3 border-t border-[#222] flex items-center justify-between text-xs text-amber-400 font-semibold">
+                <span>Open Approval Queue</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+
+            {/* Module 0.5: Item & Specimen Categories Management */}
+            <div
+              onClick={() => setActiveAdminSubTab('CATEGORIES')}
+              className="bg-[#141414] hover:bg-[#191919] border border-[#222] hover:border-amber-500/40 rounded-2xl p-5 shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl group-hover:scale-105 transition-transform">
+                    <Layers className="w-6 h-6" />
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold uppercase">
+                    {config.categories?.length ?? DEFAULT_CATEGORIES.length} Categories
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                  Categories & Taxonomy Management
+                </h3>
+                <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                  Configure material categories, export Excel reports (.xlsx), add custom taxonomies, or perform safe batch deletions with reference unlinking.
+                </p>
+              </div>
+              <div className="mt-5 pt-3 border-t border-[#222] flex items-center justify-between text-xs text-amber-400 font-semibold">
+                <span>Manage Categories</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+
             {/* Module 1: Shared Folder Real-Time Sync */}
             <div
               onClick={() => setActiveAdminSubTab('SHARED_SYNC')}
@@ -628,29 +766,29 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
             </div>
 
-            {/* Module 3: Word DOCX Template & Form Registry */}
+            {/* Module 3: Form Template Management (Reference Sheet & Proof Slip) */}
             <div
-              onClick={() => setActiveAdminSubTab('WORD_TEMPLATES')}
-              className="bg-[#141414] hover:bg-[#191919] border border-[#222] hover:border-purple-500/40 rounded-2xl p-5 shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
+              onClick={() => setActiveAdminSubTab('FORM_TEMPLATES')}
+              className="bg-[#141414] hover:bg-[#191919] border border-[#222] hover:border-blue-500/40 rounded-2xl p-5 shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center justify-between mb-3">
-                  <div className="p-3 bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-xl group-hover:scale-105 transition-transform">
-                    <FileText className="w-6 h-6" />
+                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl group-hover:scale-105 transition-transform">
+                    <LayoutTemplate className="w-6 h-6" />
                   </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold uppercase">
-                    QA Forms
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold uppercase">
+                    Forms & Slips
                   </span>
                 </div>
-                <h3 className="text-base font-bold text-white group-hover:text-purple-300 transition-colors">
-                  Word Form (DOCX) Template Engine
+                <h3 className="text-base font-bold text-white group-hover:text-blue-300 transition-colors">
+                  Form Template Management
                 </h3>
                 <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
-                  Upload official QA DOCX inspection form templates, configure field tags (<code className="text-purple-300 font-mono text-[10px]">{'{{productCode}}'}</code>), and generate printable certificates.
+                  Import, map, and activate custom templates for Material Reference Sheets (DOCX/HTML) and Inspection Proof Slips (HTML/Receipt TXT) with live specimen previews.
                 </p>
               </div>
-              <div className="mt-5 pt-3 border-t border-[#222] flex items-center justify-between text-xs text-purple-400 font-semibold">
-                <span>Manage Word Templates</span>
+              <div className="mt-5 pt-3 border-t border-[#222] flex items-center justify-between text-xs text-blue-400 font-semibold">
+                <span>Manage Form Templates</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
@@ -806,6 +944,37 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* SUB-SECTION: APPROVAL QUEUE */}
+      {activeAdminSubTab === 'APPROVAL_QUEUE' && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          <RevisionApprovalQueueView
+            registrations={registrations}
+            masterItems={masterItems}
+            config={config}
+            onRefreshData={onRefreshData}
+          />
+        </div>
+      )}
+
+      {/* SUB-SECTION: CATEGORIES & TAXONOMY MANAGEMENT */}
+      {activeAdminSubTab === 'CATEGORIES' && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          <CategoriesManagerView
+            config={config}
+            masterItems={masterItems}
+            registrations={registrations}
+            onRefreshData={onRefreshData}
+            onConfigChange={onConfigChange}
+            onNotify={(title, text, type) =>
+              setStatusMessage({
+                type: type === 'error' ? 'error' : type === 'success' ? 'success' : 'info',
+                text: `${title}: ${text}`
+              })
+            }
+          />
         </div>
       )}
 
@@ -1113,6 +1282,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             onConfigChange={onConfigChange}
           />
         </div>
+      )}
+
+      {/* SUB-SECTION 3B: FORM TEMPLATES MANAGEMENT (MATERIAL REFERENCE & PROOF SLIP) */}
+      {activeAdminSubTab === 'FORM_TEMPLATES' && (
+        <FormTemplateManagementView
+          config={config}
+          masterItems={masterItems}
+          registrations={registrations}
+          onNotify={(title, text, type) => setStatusMessage({ type: type === 'warning' ? 'error' : (type || 'info'), text: `${title}: ${text}` })}
+        />
       )}
 
       {/* SUB-SECTION 4: WORD TEMPLATES EMBEDDED */}

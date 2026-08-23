@@ -42,11 +42,13 @@ export default function App() {
   const [registrations, setRegistrations] = useState<ReferenceRegistration[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [config, setConfig] = useState<AppConfig>({
+    appName: 'Material Reference & Sample Tracker',
     dataDirectory: 'Application Data/ReferenceTracker_Data/',
     companyName: 'Precision Industrial Corp.',
     defaultRegisteredBy: 'Juan Dela Cruz (QA)',
     wordTemplateName: 'Official_Material_Reference_Template_v2.docx',
-    customFields: []
+    customFields: [],
+    portableMode: false
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -197,11 +199,25 @@ export default function App() {
   // Reference Registration Handlers
   const handleSaveRegistration = async (regData: Omit<ReferenceRegistration, 'id' | 'createdAt' | 'updatedAt'>) => {
     try {
+      const currentUser = userService.getCurrentUser();
+      const isAdmin = currentUser?.role === 'admin';
+      const autoApprove = isAdmin || !config.requireApprovalForRevisions;
+
       let res;
       if (editingRegistration) {
-        res = await db.updateRegistration(editingRegistration.id, regData, config.defaultRegisteredBy || 'Admin');
+        res = await db.updateRegistration(
+          editingRegistration.id,
+          regData,
+          currentUser?.fullName || currentUser?.shortName || config.defaultRegisteredBy || 'Admin',
+          currentUser,
+          autoApprove
+        );
       } else {
-        res = await db.createRegistration(regData, config.defaultRegisteredBy || 'Admin');
+        res = await db.createRegistration(
+          regData,
+          currentUser?.fullName || currentUser?.shortName || config.defaultRegisteredBy || 'Admin',
+          autoApprove
+        );
       }
       if (res && res.success === false) {
         return { success: false, error: res.error || 'Failed to save reference registration.' };
@@ -214,7 +230,17 @@ export default function App() {
   };
 
   const handleDeleteRegistration = async (id: string) => {
-    await db.deleteRegistration(id, config.defaultRegisteredBy || 'Admin');
+    const user = userService.getCurrentUser();
+    if (!user || user.role !== 'admin') {
+      addNotification('Permission Denied', 'Only administrators can delete reference sample registrations.', 'warning');
+      return;
+    }
+    const res = await db.deleteRegistration(id, user.fullName || user.shortName || 'Admin');
+    if (!res.success) {
+      addNotification('Error', res.error || 'Failed to delete registration.', 'warning');
+      return;
+    }
+    addNotification('Registration Deleted', 'Reference sample record removed successfully.', 'success');
     await refreshAllData();
   };
 
@@ -265,8 +291,8 @@ export default function App() {
     );
   }
 
-  const selectedRegistrationMasterItem = viewingRegistration
-    ? masterItems.find((m) => m.productCode.toLowerCase() === viewingRegistration.productCode.toLowerCase())
+  const selectedRegistrationMasterItem = viewingRegistration && viewingRegistration.productCode
+    ? masterItems.find((m) => m?.productCode && m.productCode.toLowerCase() === viewingRegistration.productCode.toLowerCase())
     : undefined;
 
   return (
@@ -364,7 +390,7 @@ export default function App() {
           />
         )}
 
-        {currentTab === 'ADMIN_DASHBOARD' && currentUser?.role === 'admin' && (
+        {(currentTab === 'ADMIN_DASHBOARD' || currentTab === 'FORM_TEMPLATES') && currentUser?.role === 'admin' && (
           <AdminDashboardView
             config={config}
             masterItems={masterItems}

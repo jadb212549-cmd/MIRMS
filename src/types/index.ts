@@ -32,21 +32,27 @@ export interface MasterItem {
 export interface PhotoAttachment {
   id: string;
   fileName: string;
+  name?: string; // alias for fileName
   fileSize: number;
+  size?: number; // alias for fileSize
   dataUrl: string; // base64 or relative file path in Tauri
   caption?: string;
   uploadedAt: string;
   isPrimary?: boolean; // Main sample photo flag
   includeInPrint?: boolean; // Whether to include in physical printable card / Word doc
   photoCategory?: PhotoCategory;
+  category?: string; // alias / string category
   orderIndex?: number;
 }
 
 export interface DocumentAttachment {
   id: string;
   fileName: string;
+  name?: string; // alias for fileName
   fileSize: number;
+  size?: number; // alias for fileSize
   fileType: string;
+  type?: string; // alias for fileType
   dataUrl?: string; // base64 or path
   uploadedAt: string;
 }
@@ -69,11 +75,50 @@ export interface CustomFieldValue {
   value: string | number | boolean;
 }
 
+export type RevisionStatus = 'APPROVED' | 'PENDING_APPROVAL' | 'REJECTED' | 'DRAFT';
+
+export interface ReferenceRevisionRecord {
+  id: string;
+  referenceId: string;
+  versionNumber: number; // 1, 2, 3...
+  revisionCode: string; // "Rev 01", "Rev 02", etc.
+  status: RevisionStatus;
+
+  // Data snapshot for this specific revision
+  masterItemId: string;
+  productCode: string;
+  materialType?: MaterialType;
+  category?: string;
+  registrationDate: string;
+  registeredBy: string; // Original registrant or revision author
+  supplier?: string;
+  specification?: string;
+  remarks?: string;
+  customFields: Record<string, string | number | boolean>;
+  photos: PhotoAttachment[];
+  attachments: DocumentAttachment[];
+  selectedPrintPhotoIds?: string[];
+  printLayout?: PrintLayoutType;
+
+  // Revision & Approval Tracking
+  submittedBy: string;
+  submittedAt: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  rejectionReason?: string;
+  revisionNotes?: string;
+  changeSummary?: string;
+  changedFields?: string[];
+}
+
 export interface ReferenceRevision {
   id: string;
   revision: string; // e.g. "Rev 01"
   date: string;
   author: string;
+  status?: RevisionStatus;
   specification?: string;
   remarks?: string;
   supplier?: string;
@@ -91,8 +136,20 @@ export interface ReferenceRegistration {
   supplier?: string;
   specification?: string;
   remarks?: string;
-  revision: string; // e.g. "Rev 01", "Rev 02"
-  revisionHistory?: ReferenceRevision[];
+  revision: string; // Active official revision e.g. "Rev 01", "Rev 02"
+  status: RevisionStatus; // Status of the active reference (APPROVED, PENDING_APPROVAL, REJECTED)
+  currentVersionNumber?: number; // 1, 2, 3...
+  currentApprovedVersionId?: string;
+
+  // Pending Revision Pointer
+  hasPendingRevision?: boolean;
+  pendingRevisionId?: string;
+  pendingRevision?: ReferenceRevisionRecord;
+
+  // Full Version History
+  versions?: ReferenceRevisionRecord[];
+  revisionHistory?: ReferenceRevision[]; // backwards compatibility
+
   customFields: Record<string, string | number | boolean>;
   photos: PhotoAttachment[];
   attachments: DocumentAttachment[];
@@ -108,10 +165,12 @@ export interface AuditLogEntry {
   id: string;
   timestamp: string;
   user: string;
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'IMPORT' | 'EXPORT' | 'BACKUP' | 'RESTORE' | 'GENERATE_FORM';
-  entityType: 'MASTER_ITEM' | 'REFERENCE' | 'TEMPLATE' | 'SETTINGS' | 'SYSTEM';
+  performedBy?: string; // alias for user
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'IMPORT' | 'EXPORT' | 'BACKUP' | 'RESTORE' | 'GENERATE_FORM' | 'APPROVE' | 'REJECT' | 'SUBMIT_REVISION';
+  entityType: 'MASTER_ITEM' | 'REFERENCE' | 'TEMPLATE' | 'SETTINGS' | 'SYSTEM' | 'REVISION';
   entityId?: string;
   entityIdentifier?: string; // e.g. Product Code
+  entityKey?: string; // alias for entityIdentifier
   details: string;
 }
 
@@ -135,6 +194,9 @@ export interface SyncMessage {
     | 'MUTATION_REG_CREATED'
     | 'MUTATION_REG_UPDATED'
     | 'MUTATION_REG_DELETED'
+    | 'MUTATION_REVISION_SUBMITTED'
+    | 'MUTATION_REVISION_APPROVED'
+    | 'MUTATION_REVISION_REJECTED'
     | 'MUTATION_CONFIG_UPDATED'
     | 'MUTATION_FULL_RESTORE'
     | 'PRESENCE_HEARTBEAT'
@@ -177,6 +239,9 @@ export interface AppConfig {
   autoBackupDailyEnabled?: boolean;
   lastAutoBackupDate?: string;
   lastAutoBackupTimestamp?: string;
+  adminCanAutoApproveOwnRevisions?: boolean;
+  requireApprovalForRevisions?: boolean;
+  requireAdminApprovalForNewRegistrations?: boolean;
 }
 
 export interface DailyAutoBackupRecord {
@@ -216,11 +281,42 @@ export interface DashboardStats {
   recentAudits: AuditLogEntry[];
 }
 
+export type FormType = 'material_reference_sheet' | 'inspection_proof_slip';
+
+export interface FormTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  formType: FormType;
+  version: string;
+  isActive: boolean;
+  fileType: 'docx' | 'html' | 'json' | 'txt';
+  fileName?: string;
+  fileContent?: string; // base64 for docx or raw HTML/markup template
+  fieldMappings: Record<string, string>; // Template Placeholder / tag (e.g. "{{material_code}}") -> System Field Key (e.g. "productCode")
+  customCss?: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  isBuiltIn?: boolean;
+}
+
+export interface SystemFieldOption {
+  key: string;
+  tag: string;
+  label: string;
+  category: 'Material Data' | 'Registration & Inspection' | 'Sign-off & Approval' | 'System & Meta' | 'Custom Fields' | 'Photos';
+  sampleValue: string;
+  isRequired?: boolean;
+  description: string;
+}
+
 export type NavigationTab =
   | 'DASHBOARD'
   | 'MASTER_ITEMS'
   | 'REGISTRATIONS'
   | 'ADMIN_DASHBOARD'
+  | 'FORM_TEMPLATES'
   | 'EXCEL_MANAGER'
   | 'WORD_TEMPLATES'
   | 'DATA_MANAGEMENT'

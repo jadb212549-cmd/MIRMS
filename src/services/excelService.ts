@@ -318,5 +318,140 @@ export const excelService = {
     const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     tauriBridge.saveFileBlob(blob, filename);
+  },
+
+  /**
+   * Exports Complete Revision Audit History Log to Excel (.xlsx) for Quality Auditing & Compliance
+   */
+  exportRevisionAuditHistory(
+    registrations: ReferenceRegistration[],
+    masterItems: MasterItem[],
+    filename = `Material_Reference_Revision_Audit_Log_${new Date().toISOString().split('T')[0]}.xlsx`
+  ): void {
+    const masterMap = new Map(masterItems.map((m) => [m.productCode.toLowerCase(), m]));
+
+    const exportRows: any[] = [];
+
+    registrations.forEach((reg) => {
+      const master = masterMap.get(reg.productCode.toLowerCase());
+      const versions = reg.versions || [];
+
+      if (versions.length === 0) {
+        // Fallback for baseline without explicit versions array
+        exportRows.push({
+          'Product Code': reg.productCode,
+          'Description': master?.description || '-',
+          'Category': master?.category || reg.category || 'RM',
+          'Version Number': reg.currentVersionNumber || 1,
+          'Revision Code': reg.revision,
+          'Audit Status': reg.status || 'APPROVED',
+          'Submitted By': reg.registeredBy,
+          'Submitted Date': reg.registrationDate,
+          'Approved By': reg.registeredBy,
+          'Approved Date': reg.registrationDate,
+          'Rejected By': '-',
+          'Rejected Date': '-',
+          'Revision Notes / Justification': 'Original baseline registration',
+          'Supplier': reg.supplier || '-',
+          'Specifications': reg.specification || '-',
+          'Quality Remarks': reg.remarks || '-',
+          'Photos Count': reg.photos?.length || 0,
+          'Attachments Count': reg.attachments?.length || 0
+        });
+      } else {
+        versions.forEach((ver) => {
+          exportRows.push({
+            'Product Code': ver.productCode || reg.productCode,
+            'Description': master?.description || '-',
+            'Category': master?.category || ver.category || reg.category || 'RM',
+            'Version Number': ver.versionNumber,
+            'Revision Code': ver.revisionCode,
+            'Audit Status': ver.status,
+            'Submitted By': ver.submittedBy || ver.registeredBy,
+            'Submitted Date': ver.submittedAt ? new Date(ver.submittedAt).toLocaleDateString() : ver.registrationDate,
+            'Approved By': ver.approvedBy || '-',
+            'Approved Date': ver.approvedAt ? new Date(ver.approvedAt).toLocaleDateString() : '-',
+            'Rejected By': ver.rejectedBy || '-',
+            'Rejected Date': ver.rejectedAt ? new Date(ver.rejectedAt).toLocaleDateString() : '-',
+            'Revision Notes / Justification': ver.revisionNotes || ver.changeSummary || 'Baseline reference registration',
+            'Supplier': ver.supplier || reg.supplier || '-',
+            'Specifications': ver.specification || '-',
+            'Quality Remarks': ver.remarks || '-',
+            'Photos Count': ver.photos?.length || 0,
+            'Attachments Count': ver.attachments?.length || 0
+          });
+        });
+      }
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet['!cols'] = [
+      { wch: 20 }, // Product Code
+      { wch: 40 }, // Description
+      { wch: 14 }, // Category
+      { wch: 16 }, // Version Number
+      { wch: 16 }, // Revision Code
+      { wch: 18 }, // Audit Status
+      { wch: 20 }, // Submitted By
+      { wch: 16 }, // Submitted Date
+      { wch: 20 }, // Approved By
+      { wch: 16 }, // Approved Date
+      { wch: 20 }, // Rejected By
+      { wch: 16 }, // Rejected Date
+      { wch: 45 }, // Revision Notes
+      { wch: 24 }, // Supplier
+      { wch: 45 }, // Specifications
+      { wch: 35 }, // Quality Remarks
+      { wch: 14 }, // Photos Count
+      { wch: 16 }  // Attachments Count
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Revision Audit Trail');
+
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    tauriBridge.saveFileBlob(blob, filename);
+  },
+
+  /**
+   * Exports configured item categories to Excel (.xlsx) with usage metrics
+   */
+  exportCategories(
+    categories: string[],
+    masterItems: MasterItem[],
+    registrations: ReferenceRegistration[],
+    filename = `Material_Categories_List_${new Date().toISOString().split('T')[0]}.xlsx`
+  ): void {
+    const exportRows = categories.map((cat, idx) => {
+      const trimmed = cat.trim();
+      const masterCount = masterItems.filter((m) => m.category && m.category.trim().toLowerCase() === trimmed.toLowerCase()).length;
+      const regCount = registrations.filter((r) => r.category && r.category.trim().toLowerCase() === trimmed.toLowerCase()).length;
+      return {
+        'No.': idx + 1,
+        'Category Name': trimmed,
+        'Associated Master Items': masterCount,
+        'Associated Sample Registrations': regCount,
+        'Total Active References': masterCount + regCount,
+        'Usage Status': masterCount + regCount > 0 ? 'Active / In Use' : 'Unused'
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet['!cols'] = [
+      { wch: 8 },  // No.
+      { wch: 32 }, // Category Name
+      { wch: 26 }, // Master items count
+      { wch: 30 }, // Regs count
+      { wch: 24 }, // Total Active
+      { wch: 18 }  // Usage Status
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Categories');
+
+    const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    tauriBridge.saveFileBlob(blob, filename);
   }
 };

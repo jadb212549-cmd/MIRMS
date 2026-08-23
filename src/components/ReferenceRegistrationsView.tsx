@@ -1,9 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import { ReferenceRegistration, MasterItem, AppConfig } from '../types';
-import { ShieldCheck, Search, Filter, Plus, FileText, FileSpreadsheet, LayoutGrid, List, Image, Paperclip, Eye, Download, Printer } from 'lucide-react';
+import { 
+  ShieldCheck, 
+  Search, 
+  Filter, 
+  Plus, 
+  FileText, 
+  FileSpreadsheet, 
+  LayoutGrid, 
+  List, 
+  Image, 
+  Paperclip, 
+  Eye, 
+  Download, 
+  Printer, 
+  History,
+  Clock
+} from 'lucide-react';
 import { excelService } from '../services/excelService';
 import { wordService } from '../services/wordService';
 import { InspectionProofModal } from './InspectionProofModal';
+import { RevisionAuditDossierModal } from './RevisionAuditDossierModal';
 
 interface ReferenceRegistrationsViewProps {
   registrations: ReferenceRegistration[];
@@ -28,6 +45,7 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
 }) => {
   const [localSearch, setLocalSearch] = useState('');
   const [proofRegistration, setProofRegistration] = useState<ReferenceRegistration | null>(null);
+  const [auditRegistration, setAuditRegistration] = useState<ReferenceRegistration | null>(null);
   const searchTerm = globalSearchQuery || localSearch;
 
   const handleSearchChange = (val: string) => {
@@ -38,6 +56,7 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
   };
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'RM' | 'PS'>('ALL');
   const [formFilter, setFormFilter] = useState<'ALL' | 'GENERATED' | 'PENDING'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'APPROVED' | 'PENDING_APPROVAL' | 'PENDING_REVISION' | 'REJECTED'>('ALL');
   const [viewMode, setViewMode] = useState<'GRID' | 'TABLE'>('GRID');
 
   const masterMap = useMemo(() => {
@@ -68,9 +87,16 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
         (formFilter === 'GENERATED' && reg.wordFormGenerated) ||
         (formFilter === 'PENDING' && !reg.wordFormGenerated);
 
-      return searchMatch && catMatch && formMatch;
+      const statusMatch =
+        statusFilter === 'ALL' ||
+        (statusFilter === 'APPROVED' && reg.status === 'APPROVED' && !reg.hasPendingRevision) ||
+        (statusFilter === 'PENDING_APPROVAL' && reg.status === 'PENDING_APPROVAL') ||
+        (statusFilter === 'PENDING_REVISION' && reg.hasPendingRevision) ||
+        (statusFilter === 'REJECTED' && reg.status === 'REJECTED');
+
+      return searchMatch && catMatch && formMatch && statusMatch;
     });
-  }, [registrations, masterMap, searchTerm, categoryFilter, formFilter]);
+  }, [registrations, masterMap, searchTerm, categoryFilter, formFilter, statusFilter]);
 
   return (
     <div className="space-y-4 select-none">
@@ -118,6 +144,22 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
             </select>
           </div>
 
+          {/* Approval Status Filter */}
+          <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
+            <span className="text-gray-400 font-medium">Approval:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer"
+            >
+              <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Approval States</option>
+              <option value="APPROVED" className="bg-[#1A1A1A] text-emerald-400">Approved (Official)</option>
+              <option value="PENDING_REVISION" className="bg-[#1A1A1A] text-amber-400">Pending Revision</option>
+              <option value="PENDING_APPROVAL" className="bg-[#1A1A1A] text-blue-400">Pending Initial Approval</option>
+              <option value="REJECTED" className="bg-[#1A1A1A] text-red-400">Rejected</option>
+            </select>
+          </div>
+
           {/* Grid / Table View toggle */}
           <div className="flex items-center bg-[#1A1A1A] p-0.5 rounded-lg border border-[#333]">
             <button
@@ -140,13 +182,23 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
             </button>
           </div>
 
-          {/* Export button */}
+          {/* Export buttons */}
           <button
             onClick={() => excelService.exportRegistrations(filteredRegistrations, masterItems)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] rounded-lg border border-[#333] transition-colors"
+            title="Export Reference Samples to Excel"
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-green-400" />
             <span className="hidden sm:inline">Export Excel</span>
+          </button>
+
+          <button
+            onClick={() => excelService.exportRevisionAuditHistory(filteredRegistrations, masterItems)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg border border-purple-500/20 transition-colors"
+            title="Export Complete Revision History & Audit Trail to Excel (.xlsx)"
+          >
+            <History className="w-3.5 h-3.5 text-purple-400" />
+            <span className="hidden sm:inline">Audit Log (.xlsx)</span>
           </button>
 
           {/* Register New Reference */}
@@ -205,6 +257,11 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                       <span className="text-[10px] font-mono font-bold bg-black/80 text-blue-400 px-2 py-0.5 rounded border border-[#333]">
                         {reg.productCode}
                       </span>
+                      {reg.hasPendingRevision && (
+                        <span className="text-[9px] font-mono font-bold bg-amber-500 text-black px-1.5 py-0.5 rounded animate-pulse" title="Proposed revision waiting for Admin approval">
+                          REV PENDING
+                        </span>
+                      )}
                     </div>
 
                     <div className="absolute top-2 right-2 flex items-center gap-1">
@@ -219,6 +276,17 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                         }`}
                       >
                         {master?.category || 'RM'}
+                      </span>
+                      <span
+                        className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                          reg.status === 'APPROVED'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : reg.status === 'PENDING_APPROVAL'
+                            ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                            : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                        }`}
+                      >
+                        {reg.status || 'APPROVED'}
                       </span>
                     </div>
                   </div>
@@ -271,6 +339,13 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
 
                   <div className="flex items-center gap-1.5">
                     <button
+                      onClick={() => setAuditRegistration(reg)}
+                      title="View Revision Audit History & Diff"
+                      className="p-1.5 text-gray-400 hover:text-purple-300 bg-[#1A1A1A] hover:bg-purple-500/20 rounded border border-[#333] hover:border-purple-500/30 transition-colors cursor-pointer"
+                    >
+                      <History className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={() => setProofRegistration(reg)}
                       title="Print Inspection Proof"
                       className="p-1.5 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
@@ -311,6 +386,7 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                   <th className="py-3 px-4 font-medium">Description</th>
                   <th className="py-3 px-3 w-20 font-medium">Rev</th>
                   <th className="py-3 px-3 w-28 font-medium">Category</th>
+                  <th className="py-3 px-3 w-32 font-medium">Status</th>
                   <th className="py-3 px-3 w-36 font-medium">Registered By</th>
                   <th className="py-3 px-3 w-28 font-medium">Reg Date</th>
                   <th className="py-3 px-3 w-24 text-center font-medium">Files</th>
@@ -324,7 +400,14 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                   return (
                     <tr key={reg.id} className="hover:bg-[#1A1A1A] transition-colors group">
                       <td className="py-3 px-4 font-mono font-bold text-blue-400">
-                        {reg.productCode}
+                        <div className="flex items-center gap-1.5">
+                          <span>{reg.productCode}</span>
+                          {reg.hasPendingRevision && (
+                            <span className="text-[9px] font-mono font-bold bg-amber-500 text-black px-1 rounded animate-pulse" title="Pending revision">
+                              REV
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-gray-200 font-medium max-w-xs truncate">
                         {master?.description || reg.specification || '-'}
@@ -343,6 +426,19 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                           }`}
                         >
                           {master?.category || 'RM'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span
+                          className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                            reg.status === 'APPROVED'
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              : reg.status === 'PENDING_APPROVAL'
+                              ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                              : 'bg-red-500/15 text-red-400 border border-red-500/30'
+                          }`}
+                        >
+                          {reg.status || 'APPROVED'}
                         </span>
                       </td>
                       <td className="py-3 px-3 text-gray-300 font-medium">
@@ -374,6 +470,13 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setAuditRegistration(reg)}
+                            title="View Revision Audit History & Diff"
+                            className="p-1 text-gray-400 hover:text-purple-300 bg-[#1A1A1A] hover:bg-purple-500/20 rounded border border-[#333] hover:border-purple-500/30 transition-colors cursor-pointer"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => setProofRegistration(reg)}
                             title="Print Inspection Proof"
@@ -417,6 +520,15 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
           registration={proofRegistration}
           masterItem={masterMap.get(proofRegistration.productCode.toLowerCase())}
           config={config}
+        />
+      )}
+
+      {/* Revision Audit Dossier Modal */}
+      {auditRegistration && (
+        <RevisionAuditDossierModal
+          registration={auditRegistration}
+          masterItem={masterMap.get(auditRegistration.productCode.toLowerCase())}
+          onClose={() => setAuditRegistration(null)}
         />
       )}
     </div>

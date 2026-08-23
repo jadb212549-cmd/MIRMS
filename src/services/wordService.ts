@@ -27,10 +27,26 @@ export const wordService = {
     masterItem: MasterItem,
     config: AppConfig
   ): Promise<Blob> {
+    // Check if an active custom template exists for Material Reference Sheet
+    let activeTemplateContent = config.wordTemplateContent;
+    let activeTemplateMappings: Record<string, string> = {};
+    let activeTemplateName = config.wordTemplateName || 'Official_Template.docx';
+
+    try {
+      const activeTemplate = await db.getActiveFormTemplate('material_reference_sheet');
+      if (activeTemplate && activeTemplate.fileType === 'docx' && activeTemplate.fileContent) {
+        activeTemplateContent = activeTemplate.fileContent;
+        activeTemplateMappings = activeTemplate.fieldMappings || {};
+        activeTemplateName = activeTemplate.fileName || activeTemplate.name || activeTemplateName;
+      }
+    } catch (e) {
+      console.warn('Could not query active form template for docx generation:', e);
+    }
+
     // If a custom Word template (.docx base64) was uploaded, process it using JSZip
-    if (config.wordTemplateContent) {
+    if (activeTemplateContent) {
       try {
-        const binaryString = atob(config.wordTemplateContent);
+        const binaryString = atob(activeTemplateContent);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
         for (let i = 0; i < len; i++) {
@@ -73,8 +89,18 @@ export const wordService = {
           todayDateTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
           currentYear: String(new Date().getFullYear()),
           documentTitle: 'MATERIAL REFERENCE & SAMPLE SPECIFICATION FORM',
-          templateName: config.wordTemplateName || 'Uploaded_Template.docx'
+          templateName: activeTemplateName
         };
+
+        // Apply custom mappings if configured in the template
+        if (Object.keys(activeTemplateMappings).length > 0) {
+          Object.entries(activeTemplateMappings).forEach(([tplTag, sysKey]) => {
+            const cleanTagKey = tplTag.replace(/[\{\}\s]/g, '');
+            if (replacements[sysKey] !== undefined) {
+              replacements[cleanTagKey] = replacements[sysKey];
+            }
+          });
+        }
 
         // Custom fields mapping
         if (registration.customFields) {

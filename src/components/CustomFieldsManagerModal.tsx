@@ -21,7 +21,7 @@ export const CustomFieldsManagerModal: React.FC<CustomFieldsManagerModalProps> =
   const [label, setLabel] = useState('');
   const [key, setKey] = useState('');
   const [type, setType] = useState<CustomFieldDefinition['type']>('text');
-  const [categoryApplicability, setCategoryApplicability] = useState<'ALL' | 'RM' | 'PS'>('ALL');
+  const [categoryApplicability, setCategoryApplicability] = useState<string>('ALL');
   const [defaultValue, setDefaultValue] = useState('');
   const [error, setError] = useState<string | null>(null);
 

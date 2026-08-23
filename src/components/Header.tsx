@@ -258,11 +258,24 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const pendingApprovalsCount = useMemo(() => {
+    return registrations.filter((r) => r.hasPendingRevision || r.status === 'PENDING_APPROVAL').length;
+  }, [registrations]);
+
   const primaryNavItems: { id: NavigationTab; label: string; icon: React.ReactNode; badge?: string | number }[] = [
     { id: 'DASHBOARD', label: 'Dashboard', icon: <Layers className="w-3.5 h-3.5" /> },
     { id: 'MASTER_ITEMS', label: 'Master Items', icon: <Database className="w-3.5 h-3.5" />, badge: totalMaster },
     { id: 'REGISTRATIONS', label: 'Reference Registry', icon: <ShieldCheck className="w-3.5 h-3.5" />, badge: registeredCount },
-    ...(currentUser?.role === 'admin' ? [{ id: 'ADMIN_DASHBOARD', label: 'Admin Dashboard', icon: <Settings className="w-3.5 h-3.5" /> } as any] : [])
+    ...(currentUser?.role === 'admin'
+      ? [
+          {
+            id: 'ADMIN_DASHBOARD',
+            label: 'Admin Dashboard',
+            icon: <Settings className="w-3.5 h-3.5" />,
+            badge: pendingApprovalsCount > 0 ? `${pendingApprovalsCount} pending` : undefined
+          } as any
+        ]
+      : [])
   ];
 
   const isAdminActive = current === 'ADMIN_DASHBOARD';

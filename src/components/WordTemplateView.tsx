@@ -48,7 +48,7 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
   const [companyName, setCompanyName] = useState(config.companyName || 'Precision Industrial Manufacturing Corp.');
   const [selectedRegId, setSelectedRegId] = useState<string>(registrations[0]?.id || '');
   const [isGeneratingTest, setIsGeneratingTest] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   // Layout mode: 'split' (side-by-side) | 'preview-focused' | 'placeholders-focused'
   const [layoutMode, setLayoutMode] = useState<'split' | 'preview-focused' | 'placeholders-focused'>('split');
@@ -129,7 +129,7 @@ export const WordTemplateView: React.FC<WordTemplateViewProps> = ({
         (selectedCategory === 'CUSTOMFIELD' && item.category === 'CustomField') ||
         (selectedCategory === 'MASTER' && item.category === 'Master') ||
         (selectedCategory === 'REGISTRATION' && item.category === 'Registration') ||
-        (selectedCategory === 'SIGN-OFF' && (item.category === 'Sign-off' || item.category === 'Signoff')) ||
+        (selectedCategory === 'SIGN-OFF' && item.category === 'Sign-off') ||
         itemCat === selectedCategory;
 
       return matchSearch && matchCategory;

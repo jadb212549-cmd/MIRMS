@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { MasterItem, ReferenceRegistration, ExcelImportRow } from '../types';
-import { FileSpreadsheet, Upload, Download, CheckCircle2, AlertTriangle, XCircle, Database, ShieldCheck, ArrowRight, RefreshCw, FileText } from 'lucide-react';
+import { MasterItem, ReferenceRegistration, ExcelImportRow, AppConfig } from '../types';
+import { FileSpreadsheet, Upload, Download, CheckCircle2, AlertTriangle, XCircle, Database, ShieldCheck, ArrowRight, RefreshCw, FileText, Layers } from 'lucide-react';
 import { excelService } from '../services/excelService';
 import { tauriBridge } from '../services/tauriService';
 import { db } from '../services/db';
@@ -9,7 +9,9 @@ interface ExcelManagerViewProps {
   masterItems: MasterItem[];
   registrations: ReferenceRegistration[];
   onRefreshData: () => Promise<void>;
-  onNavigateTab: (tab: any) => void;
+  onNavigateTab?: (tab: any) => void;
+  config?: AppConfig;
+  onConfigChange?: (newConfig: Partial<AppConfig>) => Promise<void>;
 }
 
 export const ExcelManagerView: React.FC<ExcelManagerViewProps> = ({
@@ -65,6 +67,7 @@ export const ExcelManagerView: React.FC<ExcelManagerViewProps> = ({
       const rowsToImport = validRows.map((r) => ({
         productCode: r.productCode,
         description: r.description,
+        materialType: r.materialType || 'RM',
         category: r.category,
         status: r.status,
         unit: r.unit || undefined
@@ -279,7 +282,7 @@ export const ExcelManagerView: React.FC<ExcelManagerViewProps> = ({
       )}
 
       {/* Export Options Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Export 1: Master Items */}
         <div className="bg-[#141414] rounded-xl border border-[#222] p-5 shadow-xs flex flex-col justify-between">
           <div>
@@ -292,18 +295,18 @@ export const ExcelManagerView: React.FC<ExcelManagerViewProps> = ({
                   Export Master Reference Items List
                 </h3>
                 <p className="text-xs text-gray-500 font-mono">
-                  Total {masterItems.length} master items in SQLite database
+                  Total {masterItems.length} master items in database
                 </p>
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-              Produces a clean Excel (.xlsx) file containing Product Codes, Descriptions, Categories (RM/PS), Status, and Units. Strictly zero inventory columns included.
+              Produces a clean Excel (.xlsx) file containing Product Codes, Descriptions, Categories, Status, and Units. Zero inventory columns.
             </p>
           </div>
 
           <button
             onClick={() => excelService.exportMasterItems(masterItems)}
-            className="mt-4 flex items-center justify-center gap-2 w-full py-2 px-3 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] rounded-lg transition-colors border border-[#333]"
+            className="mt-4 flex items-center justify-center gap-2 w-full py-2 px-3 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] rounded-lg transition-colors border border-[#333] cursor-pointer"
           >
             <Download className="w-4 h-4 text-green-400" />
             <span>Export Master Items (.xlsx)</span>
@@ -319,7 +322,7 @@ export const ExcelManagerView: React.FC<ExcelManagerViewProps> = ({
               </div>
               <div>
                 <h3 className="text-sm font-bold text-gray-100">
-                  Export Registered QA Samples Report
+                  Export Registered QA Samples
                 </h3>
                 <p className="text-xs text-gray-500 font-mono">
                   Total {registrations.length} registered sample references
@@ -327,16 +330,49 @@ export const ExcelManagerView: React.FC<ExcelManagerViewProps> = ({
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-3 leading-relaxed">
-              Produces a full Excel (.xlsx) quality reference sheet including Registration Dates, Registered By persons, Revisions, Suppliers, Specifications, and Word Form statuses.
+              Produces a full Excel (.xlsx) quality reference sheet including Registration Dates, QA Inspectors, Revisions, and Specifications.
             </p>
           </div>
 
           <button
             onClick={() => excelService.exportRegistrations(registrations, masterItems)}
-            className="mt-4 flex items-center justify-center gap-2 w-full py-2 px-3 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] rounded-lg transition-colors border border-[#333]"
+            className="mt-4 flex items-center justify-center gap-2 w-full py-2 px-3 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] rounded-lg transition-colors border border-[#333] cursor-pointer"
           >
             <Download className="w-4 h-4 text-green-400" />
-            <span>Export QA Sample Report (.xlsx)</span>
+            <span>Export QA Samples (.xlsx)</span>
+          </button>
+        </div>
+
+        {/* Export 3: Categories Master List */}
+        <div className="bg-[#141414] rounded-xl border border-[#222] p-5 shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-[#1A1A1A] border border-[#2A2A2A] text-amber-400 rounded-lg">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-100">
+                  Export Material Categories List
+                </h3>
+                <p className="text-xs text-gray-500 font-mono">
+                  Configured classification categories
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-gray-400 mt-3 leading-relaxed">
+              Produces an Excel (.xlsx) listing all configured specimen categories, active usage status, and associated master items & registration counts.
+            </p>
+          </div>
+
+          <button
+            onClick={async () => {
+              const cats = await db.getCategories();
+              excelService.exportCategories(cats, masterItems, registrations);
+            }}
+            className="mt-4 flex items-center justify-center gap-2 w-full py-2 px-3 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] rounded-lg transition-colors border border-[#333] cursor-pointer"
+          >
+            <Download className="w-4 h-4 text-amber-400" />
+            <span>Export Categories (.xlsx)</span>
           </button>
         </div>
       </div>

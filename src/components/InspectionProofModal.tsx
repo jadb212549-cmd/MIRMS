@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ReferenceRegistration, MasterItem, AppConfig } from '../types';
+import { ReferenceRegistration, MasterItem, AppConfig, FormTemplate } from '../types';
 import { 
   X, 
   Printer, 
@@ -12,9 +12,12 @@ import {
   Tag,
   Check,
   Eye,
-  Layers
+  Layers,
+  LayoutTemplate
 } from 'lucide-react';
 import { userService, AppUser } from '../services/userService';
+import { db } from '../services/db';
+import { buildSystemDataDictionary, renderHtmlTemplateWithData } from '../services/templateDefaults';
 
 interface InspectionProofModalProps {
   isOpen: boolean;
@@ -33,6 +36,7 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
 }) => {
   const [adminUsers, setAdminUsers] = useState<AppUser[]>([]);
   const [selectedAdminId, setSelectedAdminId] = useState<string>('');
+  const [activeTemplate, setActiveTemplate] = useState<FormTemplate | null>(null);
   const [printTimestamp, setPrintTimestamp] = useState<{ date: string; time: string; full: string }>({
     date: '',
     time: '',
@@ -54,6 +58,12 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
       if (admins.length > 0) {
         setSelectedAdminId(admins[0].idNumber);
       }
+
+      db.getActiveFormTemplate('inspection_proof_slip').then(tpl => {
+        setActiveTemplate(tpl);
+      }).catch(err => {
+        console.warn('Failed to load active inspection proof template:', err);
+      });
 
       // Generate current print timestamp
       const now = new Date();
@@ -88,6 +98,28 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
   const displayCategory = registration.category || masterItem?.category || 'Standard';
   const displayDesc = masterItem?.description || registration.specification || 'Approved Quality Reference Sample';
   const displayUnit = masterItem?.unit || 'Piece / Unit';
+
+  // Build system data dictionary for template substitution
+  const systemDataDict = buildSystemDataDictionary(
+    registration,
+    masterItem,
+    config,
+    selectedAdmin ? `${selectedAdmin.shortName} (${selectedAdmin.fullName})` : undefined
+  );
+  systemDataDict.proofSerial = proofSerial;
+  if (printTimestamp.full) {
+    systemDataDict.todayDateTime = printTimestamp.full;
+    systemDataDict.printTimestamp = printTimestamp.time;
+  }
+
+  const customRenderedHtml = activeTemplate && activeTemplate.fileContent
+    ? renderHtmlTemplateWithData(
+        activeTemplate.fileContent,
+        systemDataDict,
+        activeTemplate.fieldMappings,
+        activeTemplate.customCss
+      )
+    : null;
 
   const handlePrint = () => {
     setIsPrinting(true);
@@ -134,7 +166,39 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
       const doc = iframe.contentWindow?.document;
       if (doc) {
         doc.open();
-        doc.write(`
+
+        if (activeTemplate && activeTemplate.fileContent) {
+          const printableHtml = renderHtmlTemplateWithData(
+            activeTemplate.fileContent,
+            { ...systemDataDict, todayDateTime: fullTime, printTimestamp: timeStr },
+            activeTemplate.fieldMappings,
+            activeTemplate.customCss
+          );
+          doc.write(`
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <title>Inspection Proof - ${registration.productCode}</title>
+                <style>
+                  @page {
+                    size: auto;
+                    margin: 8mm;
+                  }
+                  body {
+                    margin: 0;
+                    padding: 0;
+                    background: #fff;
+                    color: #0f172a;
+                  }
+                </style>
+              </head>
+              <body>
+                ${printableHtml}
+              </body>
+            </html>
+          `);
+        } else {
+          doc.write(`
           <!DOCTYPE html>
           <html>
             <head>
@@ -411,6 +475,7 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
             </body>
           </html>
         `);
+        }
         doc.close();
 
         setTimeout(() => {
@@ -553,13 +618,30 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
 
           {/* Right Preview of Receipt Slip (7 cols on lg) */}
           <div className="lg:col-span-7 flex flex-col items-center justify-start overflow-x-auto pb-4">
-            <div className="text-[11px] font-mono text-gray-400 mb-2 flex items-center gap-1.5 self-start">
-              <Eye className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Inspection Proof Slip Preview</span>
+            <div className="w-full flex items-center justify-between mb-2">
+              <div className="text-[11px] font-mono text-gray-400 flex items-center gap-1.5">
+                <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Inspection Proof Slip Preview</span>
+              </div>
+              {activeTemplate && (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Template: <strong className="font-semibold text-white">{activeTemplate.name}</strong>
+                  {activeTemplate.isBuiltIn && <span className="text-gray-400">(Built-in)</span>}
+                </span>
+              )}
             </div>
 
             {/* Visual Container */}
             <div className="w-full flex justify-center py-2">
+              {activeTemplate && !activeTemplate.isBuiltIn && customRenderedHtml ? (
+                <div 
+                  ref={printAreaRef}
+                  id="inspection-proof-print-container"
+                  className="bg-white text-slate-900 rounded-md border-2 border-slate-800 shadow-2xl p-4 w-full max-w-[440px] select-all overflow-x-auto"
+                  dangerouslySetInnerHTML={{ __html: customRenderedHtml }}
+                />
+              ) : (
               <div 
                 ref={printAreaRef}
                 id="inspection-proof-print-container"
@@ -756,6 +838,7 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
                   *** OFFICIAL QA RECORD • VERIFIED SPECIMEN PROOF ***
                 </div>
               </div>
+              )}
             </div>
           </div>
         </div>
