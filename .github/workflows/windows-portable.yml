@@ -27,10 +27,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (v22 LTS)
+      - name: Setup Node.js (v24)
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 
@@ -62,7 +62,7 @@ jobs:
 
       - name: Build Standalone Windows Desktop Executable
         run: |
-          npx tauri build --target x86_64-pc-windows-msvc --no-bundle
+          npm run tauri:build:portable -- --target x86_64-pc-windows-msvc
         env:
           RUST_BACKTRACE: 1
 
@@ -86,12 +86,14 @@ jobs:
               Write-Host "Target directory $targetDir does not exist!"
           }
 
-          # Locate release executable, excluding deps/build/incremental/examples folders
-          $exeFiles = Get-ChildItem -Path . -Recurse -Filter "*.exe" | Where-Object {
+          # Locate release executable, excluding deps/build/incremental/examples and node_modules folders
+          $searchPath = if (Test-Path $targetDir) { $targetDir } else { "." }
+          $exeFiles = Get-ChildItem -Path $searchPath -Recurse -Filter "*.exe" | Where-Object {
               $_.FullName -notmatch '\\deps\\' -and
               $_.FullName -notmatch '\\build\\' -and
               $_.FullName -notmatch '\\incremental\\' -and
-              $_.FullName -notmatch '\\examples\\'
+              $_.FullName -notmatch '\\examples\\' -and
+              $_.FullName -notmatch '\\node_modules\\'
           }
 
           $targetExe = $null
