@@ -201,7 +201,7 @@ export default function App() {
     try {
       const currentUser = userService.getCurrentUser();
       const isAdmin = currentUser?.role === 'admin';
-      const autoApprove = isAdmin || !config.requireApprovalForRevisions;
+      const autoApprove = isAdmin;
 
       let res;
       if (editingRegistration) {
@@ -223,6 +223,19 @@ export default function App() {
         return { success: false, error: res.error || 'Failed to save reference registration.' };
       }
       await refreshAllData();
+      if (isAdmin) {
+        addNotification(
+          editingRegistration ? 'Revision Approved' : 'Reference Registered',
+          `Reference sample "${regData.productCode}" (${regData.revision || 'Rev 01'}) has been approved.`,
+          'success'
+        );
+      } else {
+        addNotification(
+          editingRegistration ? 'Revision Submitted' : 'Registration Submitted for Approval',
+          `Reference sample "${regData.productCode}" has been submitted as Pending Approval and is awaiting administrator review.`,
+          'info'
+        );
+      }
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to register reference sample.' };

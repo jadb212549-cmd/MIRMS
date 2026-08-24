@@ -22,18 +22,19 @@ import {
   Printer, 
   ArrowUp, 
   ArrowDown, 
-  Layers,
-  CheckSquare,
-  Square,
-  Sparkles,
-  Lock,
-  User,
-  Search,
-  Tag,
-  Check,
-  ChevronDown,
-  Calendar,
-  Boxes
+  Layers, 
+  CheckSquare, 
+  Square, 
+  Sparkles, 
+  Lock, 
+  User, 
+  Search, 
+  Tag, 
+  Check, 
+  ChevronDown, 
+  Calendar, 
+  Boxes,
+  Clock
 } from 'lucide-react';
 import { tauriBridge } from '../services/tauriService';
 import { userService } from '../services/userService';
@@ -175,7 +176,10 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
       setSupplier(existingRegistration.supplier || '');
       setSpecification(existingRegistration.specification || '');
       setRemarks(existingRegistration.remarks || '');
-      setRevision(getNextRevision(existingRegistration.revision || 'Rev 01')); // Auto-fill next revision like Rev 02, Rev 03
+      // If existing registration is already approved, editing will submit a new revision (e.g. Rev 02).
+      // If it is NOT approved yet (e.g. PENDING_APPROVAL), editing updates the pending record directly without incrementing revision.
+      const isPending = existingRegistration.status !== 'APPROVED';
+      setRevision(isPending ? (existingRegistration.revision || 'Rev 01') : getNextRevision(existingRegistration.revision || 'Rev 01'));
       setCustomFields(existingRegistration.customFields || {});
       setPrintLayout(existingRegistration.printLayout || 'HERO_SINGLE');
 
@@ -390,6 +394,10 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     const selectedPrintPhotoIds = photos.filter(p => p.includeInPrint).map(p => p.id);
     const finalCategory = isCustomCategory ? customCategoryName.trim() : category.trim();
 
+    const currentUser = userService.getCurrentUser();
+    const isAdmin = currentUser?.role === 'admin';
+    const initialStatus = existingRegistration?.status || (isAdmin ? 'APPROVED' : 'PENDING_APPROVAL');
+
     const res = await onSave({
       masterItemId: currentMasterItem?.id || '',
       productCode: selectedProductCode.trim(),
@@ -401,7 +409,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
       specification: specification.trim() || undefined,
       remarks: remarks.trim() || undefined,
       revision: revision.trim() || 'Rev 01',
-      status: existingRegistration?.status || 'APPROVED',
+      status: initialStatus,
       customFields,
       photos,
       attachments,
@@ -432,10 +440,16 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
             </div>
             <div>
               <h3 className="text-sm font-bold text-gray-100">
-                {existingRegistration ? 'Update Reference Sample Registration' : 'Register Material Reference Sample'}
+                {existingRegistration
+                  ? existingRegistration.status === 'APPROVED'
+                    ? 'Propose Reference Revision (Requires Approval)'
+                    : 'Edit Pending Reference Registration'
+                  : 'Register Material Reference Sample'}
               </h3>
               <p className="text-xs text-gray-400">
-                QA specimen physical verification, multi-photo print configuration & certificates
+                {existingRegistration && existingRegistration.status !== 'APPROVED'
+                  ? 'Update technical specifications, metadata and photos for pending sample (not counted as revision)'
+                  : 'QA specimen physical verification, multi-photo print configuration & certificates'}
               </p>
             </div>
           </div>
@@ -972,6 +986,30 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
             />
           </div>
 
+          {/* Submission Workflow Info Banner */}
+          <div className={`p-3 rounded-lg text-xs flex items-center gap-2.5 border ${
+            userService.getCurrentUser()?.role === 'admin'
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
+              : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+          }`}>
+            <Clock className="w-4 h-4 shrink-0" />
+            <div className="leading-snug">
+              {userService.getCurrentUser()?.role === 'admin' ? (
+                <span>
+                  <strong className="text-emerald-200">Administrator Authority:</strong> Changes to this reference registration will be <strong>Approved & Activated</strong> immediately.
+                </span>
+              ) : existingRegistration && existingRegistration.status !== 'APPROVED' ? (
+                <span>
+                  <strong className="text-amber-200">Pending Item Update:</strong> This registration is currently <strong className="font-mono">PENDING APPROVAL</strong>. Saving changes will update the pending record directly without creating a new revision.
+                </span>
+              ) : (
+                <span>
+                  <strong className="text-amber-200">Approval Workflow:</strong> As a Standard User, this registration/revision will be submitted as <strong className="font-mono">PENDING APPROVAL</strong> and will require Administrator review before becoming official.
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* Modal Actions */}
           <div className="pt-3 border-t border-[#222] flex items-center justify-end gap-2">
             <button
@@ -987,10 +1025,14 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
               className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors disabled:opacity-50"
             >
               {isSubmitting
-                ? 'Registering...'
+                ? 'Saving...'
+                : existingRegistration && existingRegistration.status !== 'APPROVED'
+                ? 'Save Pending Updates'
                 : existingRegistration
-                ? 'Save Registration & Print Setup'
-                : 'Confirm Reference Registration'}
+                ? 'Submit Revision for Approval'
+                : userService.getCurrentUser()?.role === 'admin'
+                ? 'Confirm & Approve Registration'
+                : 'Submit for Admin Approval'}
             </button>
           </div>
         </form>

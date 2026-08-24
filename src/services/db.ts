@@ -780,7 +780,7 @@ class DatabaseService {
   public async createRegistration(
     regData: Omit<ReferenceRegistration, 'id' | 'createdAt' | 'updatedAt'>,
     author?: string,
-    autoApprove = true
+    autoApprove = false
   ): Promise<{ success: boolean; registration?: ReferenceRegistration; error?: string }> {
     await this.init();
     const normalizedCode = regData.productCode.trim();
@@ -1101,7 +1101,7 @@ class DatabaseService {
     return { success: true, registration: updatedReg, revision: revisionRecord };
   }
 
-  // Update registration wrapper (routes to submitRevision or direct update depending on role/flag)
+  // Update registration wrapper (direct update if item is pending approval; otherwise routes to submitRevision)
   public async updateRegistration(
     id: string,
     updates: Partial<Omit<ReferenceRegistration, 'id' | 'createdAt'>>,
@@ -1109,6 +1109,86 @@ class DatabaseService {
     authorUser?: { shortName?: string; fullName?: string; role?: string; idNumber?: string } | null,
     autoApprove = false
   ): Promise<{ success: boolean; registration?: ReferenceRegistration; error?: string }> {
+    await this.init();
+    const index = this.registrations.findIndex((r) => r.id === id);
+    if (index === -1) {
+      return { success: false, error: 'Reference registration not found.' };
+    }
+
+    const current = this.registrations[index];
+
+    // If the registration is NOT approved yet (e.g. PENDING_APPROVAL or REJECTED),
+    // editing it should NOT be counted as a revision. It updates the pending record directly.
+    if (current.status !== 'APPROVED') {
+      // Check permissions
+      if (authorUser) {
+        const check = this.checkCanEdit(current, authorUser);
+        if (!check.allowed) {
+          return { success: false, error: check.reason };
+        }
+      }
+
+      const now = new Date().toISOString();
+      const authorName = authorUser?.fullName || authorUser?.shortName || author || current.registeredBy || 'Inspector';
+
+      if (updates.category && updates.category.trim()) {
+        await this.addCategory(updates.category.trim());
+      }
+
+      // Selected print photo IDs
+      const selectedPrintPhotoIds = updates.selectedPrintPhotoIds !== undefined
+        ? updates.selectedPrintPhotoIds
+        : updates.photos
+        ? updates.photos.filter(p => p.includeInPrint).map(p => p.id)
+        : current.selectedPrintPhotoIds;
+
+      const updatedReg: ReferenceRegistration = {
+        ...current,
+        supplier: updates.supplier !== undefined ? updates.supplier?.trim() : current.supplier,
+        specification: updates.specification !== undefined ? updates.specification?.trim() : current.specification,
+        remarks: updates.remarks !== undefined ? updates.remarks?.trim() : current.remarks,
+        category: updates.category || current.category,
+        materialType: updates.materialType || current.materialType,
+        customFields: updates.customFields || { ...current.customFields },
+        photos: updates.photos || [...current.photos],
+        attachments: updates.attachments || [...current.attachments],
+        selectedPrintPhotoIds,
+        printLayout: updates.printLayout || current.printLayout,
+        // Maintain active revision code (e.g. Rev 01) - no revision increment
+        revision: current.revision || 'Rev 01',
+        // If an admin directly updates it with autoApprove, approve it, otherwise keep pending
+        status: autoApprove ? 'APPROVED' : current.status,
+        updatedAt: now
+      };
+
+      this.registrations[index] = updatedReg;
+      this.saveRegistrations();
+
+      await this.logAudit({
+        user: authorName,
+        action: 'UPDATE',
+        entityType: 'REFERENCE',
+        entityId: updatedReg.id,
+        entityIdentifier: updatedReg.productCode,
+        details: `Updated pending reference registration "${updatedReg.productCode}" (${updatedReg.revision}) before approval`
+      });
+
+      if (isTauri()) {
+        this.syncTauri('update_registration', updatedReg);
+      }
+
+      realtimeSync.broadcastMutation(
+        'MUTATION_REG_UPDATED',
+        updatedReg.productCode,
+        `Updated pending reference registration "${updatedReg.productCode}"`,
+        updatedReg
+      );
+
+      this.notifyListeners();
+      return { success: true, registration: updatedReg };
+    }
+
+    // If the registration is already APPROVED, editing requires formal revision workflow & approval
     return this.submitRevision(
       id,
       updates,
@@ -1297,9 +1377,12 @@ class DatabaseService {
       return v;
     });
 
+    const approvedVersion = versions.find((v) => v.status === 'APPROVED');
+
     const updatedReg: ReferenceRegistration = {
       ...current,
       status: 'APPROVED',
+      currentApprovedVersionId: approvedVersion ? approvedVersion.id : current.currentApprovedVersionId,
       hasPendingRevision: false,
       pendingRevisionId: undefined,
       pendingRevision: undefined,

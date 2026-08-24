@@ -727,5 +727,91 @@ export const wordService = {
       entityIdentifier: registration.productCode,
       details: `Generated official Word Reference Form (${filename})`
     });
+  },
+
+  /**
+   * Retrieves the raw uploaded Word template (.docx) Blob without substitutions.
+   */
+  async getRawTemplateBlob(config: AppConfig): Promise<Blob | null> {
+    let activeTemplateContent = config.wordTemplateContent;
+    try {
+      const activeTemplate = await db.getActiveFormTemplate('material_reference_sheet');
+      if (activeTemplate && activeTemplate.fileType === 'docx' && activeTemplate.fileContent) {
+        activeTemplateContent = activeTemplate.fileContent;
+      }
+    } catch (e) {
+      console.warn('Could not query active form template:', e);
+    }
+
+    if (activeTemplateContent) {
+      try {
+        const binaryString = atob(activeTemplateContent);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        return new Blob([bytes.buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        });
+      } catch (err) {
+        console.warn('Failed to parse raw template base64:', err);
+      }
+    }
+    return null;
+  },
+
+  /**
+   * Generates a preview Word document (.docx) Blob, supporting populated or raw template tags modes.
+   */
+  async getPreviewDocxBlob(
+    registration: ReferenceRegistration | null,
+    masterItem: MasterItem | null,
+    config: AppConfig,
+    mode: 'populated' | 'tags'
+  ): Promise<Blob> {
+    if (mode === 'tags') {
+      const rawBlob = await this.getRawTemplateBlob(config);
+      if (rawBlob) return rawBlob;
+    }
+
+    if (registration && masterItem) {
+      return await this.generateReferenceForm(registration, masterItem, config);
+    }
+
+    const dummyReg: ReferenceRegistration = {
+      id: 'SAMPLE-001',
+      masterItemId: 'ITEM-001',
+      productCode: 'SAMPLE-SPEC-01',
+      materialType: 'RM',
+      category: 'Standard',
+      revision: 'Rev 01',
+      registeredBy: config.defaultRegisteredBy || 'QA Inspector',
+      registrationDate: new Date().toISOString().split('T')[0],
+      supplier: 'Precision Industrial Supplier Corp.',
+      specification: 'Standard sample physical and chemical QA specification parameters verified.',
+      remarks: 'Certified for baseline production reference testing.',
+      status: 'APPROVED',
+      hasPendingRevision: false,
+      revisionHistory: [],
+      photos: [],
+      attachments: [],
+      customFields: {},
+      wordFormGenerated: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const dummyMaster: MasterItem = {
+      id: 'ITEM-001',
+      productCode: 'SAMPLE-SPEC-01',
+      description: 'Standard Baseline Industrial Specimen Material Sample',
+      materialType: 'RM',
+      category: 'Raw Material',
+      unit: 'Piece',
+      status: 'Active',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    return await this.generateReferenceForm(dummyReg, dummyMaster, config);
   }
 };

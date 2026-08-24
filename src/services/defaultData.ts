@@ -446,7 +446,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   wordDocPlaceholders: DEFAULT_WORD_PLACEHOLDERS,
   portableMode: true,
   adminCanAutoApproveOwnRevisions: true,
-  requireAdminApprovalForNewRegistrations: false
+  requireApprovalForRevisions: true,
+  requireAdminApprovalForNewRegistrations: true
 };
 
 export const INITIAL_MASTER_ITEMS: MasterItem[] = [

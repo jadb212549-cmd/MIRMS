@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { renderAsync } from 'docx-preview';
 import {
   FormTemplate,
   FormType,
@@ -52,6 +53,84 @@ interface FormTemplateManagementViewProps {
   registrations?: ReferenceRegistration[];
   onNotify?: (title: string, message: string, type?: 'info' | 'success' | 'warning') => void;
 }
+
+const DocxModalPreview: React.FC<{
+  template: FormTemplate;
+  config: AppConfig;
+  sampleDict: Record<string, string>;
+}> = ({ template, config, sampleDict }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isRendering, setIsRendering] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const render = async () => {
+      if (!containerRef.current || !template.fileContent) {
+        setIsRendering(false);
+        return;
+      }
+      setIsRendering(true);
+      setError(null);
+      containerRef.current.innerHTML = '';
+
+      try {
+        const binaryString = atob(template.fileContent);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes.buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        });
+
+        await renderAsync(blob, containerRef.current, undefined, {
+          className: 'docx-doc-render',
+          inWrapper: true,
+          ignoreWidth: false,
+          ignoreHeight: false,
+          breakPages: true,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          renderEndnotes: true,
+          useBase64URL: true
+        });
+      } catch (err: any) {
+        console.error('Error rendering template docx preview:', err);
+        if (isMounted) setError(err?.message || 'Failed to render DOCX preview');
+      } finally {
+        if (isMounted) setIsRendering(false);
+      }
+    };
+
+    render();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [template.id, template.fileContent]);
+
+  return (
+    <div className="w-full flex flex-col items-center">
+      {isRendering && (
+        <div className="flex items-center gap-2 text-xs text-blue-400 font-mono py-4">
+          <Sparkles className="w-4 h-4 animate-spin" />
+          <span>Rendering Word document...</span>
+        </div>
+      )}
+      {error && (
+        <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-300 text-xs rounded-lg mb-4">
+          {error}
+        </div>
+      )}
+      <div className="docx-preview-container w-full flex flex-col items-center">
+        <div ref={containerRef} className="w-full flex flex-col items-center" />
+      </div>
+    </div>
+  );
+};
 
 export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProps> = ({
   config,
@@ -1266,26 +1345,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
             {/* Body Preview */}
             <div className="p-6 overflow-y-auto flex-1 bg-[#1A1A1A] flex justify-center">
               {selectedTemplate.fileType === 'docx' ? (
-                <div className="bg-white text-slate-900 rounded-lg p-8 shadow-2xl max-w-2xl w-full text-xs space-y-4">
-                  <div className="text-center border-b-2 border-slate-900 pb-3">
-                    <div className="font-bold text-slate-600 uppercase text-[10px]">{config.companyName}</div>
-                    <div className="text-lg font-black">{selectedTemplate.name}</div>
-                    <div className="text-slate-500 font-mono text-[11px]">Word Document Template (.docx)</div>
-                  </div>
-                  <div className="p-4 bg-slate-100 rounded border border-slate-300 font-mono text-slate-700 text-xs">
-                    <p className="font-bold mb-2">Mapped Placeholders in Document:</p>
-                    <ul className="list-disc pl-5 space-y-1">
-                      {Object.entries(selectedTemplate.fieldMappings || {}).map(([tag, key]) => (
-                        <li key={tag}>
-                          <strong>{tag}</strong> &rarr; {sampleDict[String(key)] || `[${String(key)}]`}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <p className="text-center text-slate-500 italic text-[11px]">
-                    Word document generation processes this file directly in binary mode upon user export.
-                  </p>
-                </div>
+                <DocxModalPreview template={selectedTemplate} config={config} sampleDict={sampleDict} />
               ) : previewHtml ? (
                 <div
                   className="bg-white text-slate-900 rounded-lg shadow-2xl p-4 max-w-xl w-full overflow-x-auto"

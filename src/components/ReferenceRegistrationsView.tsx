@@ -15,7 +15,8 @@ import {
   Download, 
   Printer, 
   History,
-  Clock
+  Clock,
+  Edit3
 } from 'lucide-react';
 import { excelService } from '../services/excelService';
 import { wordService } from '../services/wordService';
@@ -338,37 +339,66 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setAuditRegistration(reg)}
-                      title="View Revision Audit History & Diff"
-                      className="p-1.5 text-gray-400 hover:text-purple-300 bg-[#1A1A1A] hover:bg-purple-500/20 rounded border border-[#333] hover:border-purple-500/30 transition-colors cursor-pointer"
-                    >
-                      <History className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setProofRegistration(reg)}
-                      title="Print Inspection Proof"
-                      className="p-1.5 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (master) {
-                          wordService.generateAndSave(reg, master, config, reg.registeredBy);
-                        }
-                      }}
-                      title="Generate Official Word Form (DOCX)"
-                      className="p-1.5 text-gray-400 hover:text-blue-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onOpenDetailModal(reg)}
-                      className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-gray-200 hover:bg-[#2A2A2A] rounded border border-[#333] transition-colors"
-                    >
-                      View Details
-                    </button>
+                    {/* If item is pending approval: all functions are removed except View Details and Edit */}
+                    {reg.status === 'PENDING_APPROVAL' ? (
+                      <>
+                        <button
+                          onClick={() => onOpenEditModal(reg)}
+                          title="Edit Pending Registration"
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 transition-colors"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => onOpenDetailModal(reg)}
+                          className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-gray-200 hover:bg-[#2A2A2A] rounded border border-[#333] transition-colors"
+                        >
+                          View Details
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => onOpenEditModal(reg)}
+                          title="Edit / Propose Revision"
+                          className="p-1.5 text-gray-400 hover:text-amber-300 bg-[#1A1A1A] hover:bg-amber-500/10 rounded border border-[#333] hover:border-amber-500/30 transition-colors cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setAuditRegistration(reg)}
+                          title="View Revision Audit History & Diff"
+                          className="p-1.5 text-gray-400 hover:text-purple-300 bg-[#1A1A1A] hover:bg-purple-500/20 rounded border border-[#333] hover:border-purple-500/30 transition-colors cursor-pointer"
+                        >
+                          <History className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setProofRegistration(reg)}
+                          title="Print Inspection Proof"
+                          className="p-1.5 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (master) {
+                              wordService.generateAndSave(reg, master, config, reg.registeredBy);
+                            }
+                          }}
+                          title="Generate Official Word Form (DOCX)"
+                          className="p-1.5 text-gray-400 hover:text-blue-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onOpenDetailModal(reg)}
+                          className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-gray-200 hover:bg-[#2A2A2A] rounded border border-[#333] transition-colors"
+                        >
+                          View Details
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -470,37 +500,65 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            onClick={() => setAuditRegistration(reg)}
-                            title="View Revision Audit History & Diff"
-                            className="p-1 text-gray-400 hover:text-purple-300 bg-[#1A1A1A] hover:bg-purple-500/20 rounded border border-[#333] hover:border-purple-500/30 transition-colors cursor-pointer"
-                          >
-                            <History className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setProofRegistration(reg)}
-                            title="Print Inspection Proof"
-                            className="p-1 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (master) {
-                                wordService.generateAndSave(reg, master, config, reg.registeredBy);
-                              }
-                            }}
-                            title="Generate Word DOCX Form"
-                            className="p-1 text-gray-400 hover:text-blue-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => onOpenDetailModal(reg)}
-                            className="px-2.5 py-1 text-xs font-semibold bg-[#222] hover:bg-[#2A2A2A] text-gray-200 rounded border border-[#333] transition-colors"
-                          >
-                            Details
-                          </button>
+                          {reg.status === 'PENDING_APPROVAL' ? (
+                            <>
+                              <button
+                                onClick={() => onOpenEditModal(reg)}
+                                title="Edit Pending Registration"
+                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 transition-colors"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>Edit</span>
+                              </button>
+                              <button
+                                onClick={() => onOpenDetailModal(reg)}
+                                className="px-2.5 py-1 text-xs font-semibold bg-[#222] hover:bg-[#2A2A2A] text-gray-200 rounded border border-[#333] transition-colors"
+                              >
+                                Details
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => onOpenEditModal(reg)}
+                                title="Edit / Propose Revision"
+                                className="p-1 text-gray-400 hover:text-amber-300 bg-[#1A1A1A] hover:bg-amber-500/10 rounded border border-[#333] hover:border-amber-500/30 transition-colors cursor-pointer"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setAuditRegistration(reg)}
+                                title="View Revision Audit History & Diff"
+                                className="p-1 text-gray-400 hover:text-purple-300 bg-[#1A1A1A] hover:bg-purple-500/20 rounded border border-[#333] hover:border-purple-500/30 transition-colors cursor-pointer"
+                              >
+                                <History className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setProofRegistration(reg)}
+                                title="Print Inspection Proof"
+                                className="p-1 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (master) {
+                                    wordService.generateAndSave(reg, master, config, reg.registeredBy);
+                                  }
+                                }}
+                                title="Generate Word DOCX Form"
+                                className="p-1 text-gray-400 hover:text-blue-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => onOpenDetailModal(reg)}
+                                className="px-2.5 py-1 text-xs font-semibold bg-[#222] hover:bg-[#2A2A2A] text-gray-200 rounded border border-[#333] transition-colors"
+                              >
+                                Details
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
