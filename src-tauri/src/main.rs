@@ -94,8 +94,52 @@ fn restore_full_backup(payload: FullBackupPayload) -> Result<(), String> {
     db::restore_backup(&payload).map_err(|e| e.to_string())
 }
 
+fn show_native_error_dialog(title: &str, message: &str) {
+    #[cfg(target_os = "windows")]
+    {
+        let escaped_msg = message.replace('"', "'").replace('`', "'");
+        let escaped_title = title.replace('"', "'");
+        let script = format!(
+            "Add-Type -AssemblyName PresentationFramework; [System.Windows.MessageBox]::Show(\"{}\", \"{}\", 'OK', 'Error')",
+            escaped_msg, escaped_title
+        );
+        let _ = std::process::Command::new("powershell")
+            .args(["-NoProfile", "-WindowStyle", "Hidden", "-Command", &script])
+            .spawn();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        eprintln!("[ERROR] {}: {}", title, message);
+    }
+}
+
+fn write_error_log(filename: &str, content: &str) {
+    let app_dir = db::get_app_data_dir();
+    let log_path = app_dir.join(filename);
+    let _ = std::fs::write(&log_path, content);
+
+    // Also attempt writing directly beside executable for portable convenience
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let direct_path = exe_dir.join(filename);
+            let _ = std::fs::write(&direct_path, content);
+        }
+    }
+}
+
 fn main() {
-    tauri::Builder::default()
+    // Set up crash / panic hook so errors on Windows are never silently swallowed
+    std::panic::set_hook(Box::new(|info| {
+        let panic_msg = format!(
+            "ReferenceTracker encountered an unexpected fatal error:\n\n{}\n\nLocation: {:?}",
+            info,
+            info.location()
+        );
+        write_error_log("ReferenceTracker_crash.log", &panic_msg);
+        show_native_error_dialog("ReferenceTracker - Fatal Error", &panic_msg);
+    }));
+
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -113,6 +157,20 @@ fn main() {
             save_app_config,
             restore_full_backup,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!());
+
+    match app {
+        Ok(app) => {
+            app.run(|_app_handle, _event| {});
+        }
+        Err(err) => {
+            let err_msg = format!(
+                "Failed to initialize ReferenceTracker desktop application:\n\n{}\n\nTroubleshooting tips:\n1. Ensure Microsoft Edge WebView2 Runtime is installed.\n2. Extract all contents of the ZIP before running.\n3. Check ReferenceTracker_startup_error.log for details.",
+                err
+            );
+            write_error_log("ReferenceTracker_startup_error.log", &err_msg);
+            show_native_error_dialog("ReferenceTracker - Startup Failure", &err_msg);
+            eprintln!("{}", err_msg);
+        }
+    }
 }

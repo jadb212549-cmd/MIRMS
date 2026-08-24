@@ -135,47 +135,120 @@ jobs:
 
           Copy-Item -Path $targetExe -Destination "$distDir/ReferenceTracker.exe" -Force
 
+          # Create START_PORTABLE.bat
+          @'
+          @echo off
+          title Material Reference & Sample Tracker
+          cd /d "%~dp0"
+          if not exist "ReferenceTracker.exe" (
+              echo [ERROR] ReferenceTracker.exe was not found in: "%~dp0"
+              echo Please ensure all files from the ZIP were extracted into the same folder.
+              echo.
+              pause
+              exit /b 1
+          )
+          start "" "%~dp0ReferenceTracker.exe"
+          exit
+          '@ | Set-Content -Path "$distDir/START_PORTABLE.bat" -Encoding ASCII
+
+          # Create DEBUG_RUN.bat
+          @'
+          @echo off
+          title Material Reference Tracker - Debug Launcher
+          cd /d "%~dp0"
+          echo ======================================================================
+          echo   Material Reference & Sample Tracker - Diagnostic Launcher
+          echo ======================================================================
+          echo.
+          echo Working Directory: %CD%
+          echo Checking executable...
+          if not exist "ReferenceTracker.exe" (
+              echo [ERROR] ReferenceTracker.exe not found in this folder!
+              echo.
+              pause
+              exit /b 1
+          )
+          echo Launching ReferenceTracker.exe with diagnostic logging...
+          echo.
+          set RUST_BACKTRACE=1
+          set RUST_LOG=debug
+          "%~dp0ReferenceTracker.exe"
+          echo.
+          echo Application process ended with exit code: %ERRORLEVEL%
+          if exist "ReferenceTracker_crash.log" (
+              echo.
+              echo ----------------------------------------------------------------------
+              echo [CRASH DETECTED] Contents of ReferenceTracker_crash.log:
+              type "ReferenceTracker_crash.log"
+              echo ----------------------------------------------------------------------
+          )
+          if exist "ReferenceTracker_startup_error.log" (
+              echo.
+              echo ----------------------------------------------------------------------
+              echo [STARTUP ERROR] Contents of ReferenceTracker_startup_error.log:
+              type "ReferenceTracker_startup_error.log"
+              echo ----------------------------------------------------------------------
+          )
+          echo.
+          pause
+          '@ | Set-Content -Path "$distDir/DEBUG_RUN.bat" -Encoding ASCII
+
+          # Create UNBLOCK_FILES.bat
+          @'
+          @echo off
+          title Unblock Downloaded Reference Tracker Files
+          cd /d "%~dp0"
+          echo Unblocking Windows Mark-of-the-Web security flags on downloaded files...
+          powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -Path . -Recurse | Unblock-File; Write-Host 'All files have been successfully unblocked!' -ForegroundColor Green"
+          echo.
+          echo Done. You may now run ReferenceTracker.exe or START_PORTABLE.bat.
+          echo.
+          pause
+          '@ | Set-Content -Path "$distDir/UNBLOCK_FILES.bat" -Encoding ASCII
+
           # Create README_PORTABLE.txt
           @'
           ================================================================================
           MATERIAL REFERENCE & SAMPLE TRACKING SYSTEM (PORTABLE WINDOWS EDITION)
           ================================================================================
 
-          1. PORTABLE STORAGE ARCHITECTURE:
-             - All your master catalog items, sample reference records, photo attachments,
-               specification documents, and audit trails are stored right beside this
-               executable inside the "ReferenceTracker_Data" folder.
-             - SQLite Database file: ReferenceTracker_Data/database/material_reference.db
-             - High-Res Specimen Photos: ReferenceTracker_Data/references/PHOTOS/
-             - Specification & TDS Files: ReferenceTracker_Data/references/ATTACHMENTS/
-             - Generated Word Documents: ReferenceTracker_Data/references/FORMS/
-             - Custom Word Form Templates: ReferenceTracker_Data/templates/
-             - Full Portable Backups: ReferenceTracker_Data/backups/
+          1. FIRST-TIME QUICK START:
+             - Step 1: ALWAYS EXTRACT ALL FILES from the ZIP to a real folder on your PC
+                       (e.g., Desktop, Documents, C:\Tools\ReferenceTracker, or USB Drive).
+                       Do NOT run ReferenceTracker.exe directly from inside the ZIP file!
+             - Step 2: Double-click "ReferenceTracker.exe" (or "START_PORTABLE.bat").
+             - Step 3: If Windows Defender SmartScreen appears, click "More info" and then
+                       "Run anyway" (this occurs for newly packaged portable executables).
 
-          2. HOW TO RUN:
-             - Double-click "ReferenceTracker.exe" (or "START_PORTABLE.bat") to launch.
-             - No installation, admin privileges, or cloud setup required.
-             - Works 100% offline.
+          2. PORTABLE STORAGE ARCHITECTURE:
+             - All master items, quality samples, high-res photos, specification TDS files,
+               audit logs, and custom settings are stored locally in the "ReferenceTracker_Data"
+               folder right beside the executable.
+             - SQLite Database: ReferenceTracker_Data/database/material_reference.db
+             - Reference Photos: ReferenceTracker_Data/references/PHOTOS/
+             - Specification Documents: ReferenceTracker_Data/references/ATTACHMENTS/
+             - Generated Word DOCX Forms: ReferenceTracker_Data/references/FORMS/
+             - Custom Word Templates: ReferenceTracker_Data/templates/
+             - Full System Backups: ReferenceTracker_Data/backups/
 
-          3. HOW TO BACK UP OR TRANSFER TO A USB DRIVE:
+          3. SYSTEM PREREQUISITES:
+             - Windows 10 (64-bit) or Windows 11.
+             - Microsoft Edge WebView2 Runtime (included natively in modern Windows 10/11).
+               If missing on legacy Windows systems, download WebView2 Evergreen Bootstrapper:
+               https://developer.microsoft.com/en-us/microsoft-edge/webview2/
+
+          4. TROUBLESHOOTING:
+             - If the app does not launch or closes immediately:
+               1. Run "DEBUG_RUN.bat" to see exact diagnostic messages in a console window.
+               2. Run "UNBLOCK_FILES.bat" if Windows blocked the downloaded ZIP files.
+               3. Check "ReferenceTracker_crash.log" or "ReferenceTracker_startup_error.log".
+               4. Verify the folder is not in a read-only location or locked network drive.
+
+          5. HOW TO BACK UP OR TRANSFER:
              - Simply copy the entire folder containing "ReferenceTracker.exe" and
-               "ReferenceTracker_Data" to any USB flash drive or external storage.
-             - All data stays intact and portable across any Windows PC.
-
-          4. ZERO INVENTORY DESIGN MANDATE:
-             - This system is engineered specifically for reference sample quality,
-               revisions, specifications, and physical retention tracking. Stock counts
-               and inventory quantities are excluded by design.
+               "ReferenceTracker_Data" to any USB flash drive or backup location.
           ================================================================================
           '@ | Set-Content -Path "$distDir/README_PORTABLE.txt" -Encoding UTF8
-
-          # Create START_PORTABLE.bat
-          @'
-          @echo off
-          title Material Reference & Sample Tracker
-          start "" "%~dp0ReferenceTracker.exe"
-          exit
-          '@ | Set-Content -Path "$distDir/START_PORTABLE.bat" -Encoding ASCII
 
           # Create ABOUT_DATABASE.txt
           @'

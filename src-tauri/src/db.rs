@@ -4,7 +4,7 @@ use directories::ProjectDirs;
 use crate::models::{MasterItem, ReferenceRegistration, AuditLogEntry, InitialStateResponse, FullBackupPayload};
 
 pub fn get_app_data_dir() -> PathBuf {
-    // Portable Mode: Always store data in "ReferenceTracker_Data" directly beside the executable
+    // Portable Mode: Preferred target is "ReferenceTracker_Data" directly beside the executable
     let base_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
@@ -12,8 +12,30 @@ pub fn get_app_data_dir() -> PathBuf {
             std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
         });
 
-    let data_dir = base_dir.join("ReferenceTracker_Data");
-    let _ = std::fs::create_dir_all(&data_dir);
+    let portable_dir = base_dir.join("ReferenceTracker_Data");
+
+    // Try creating directories in portable folder
+    let is_portable_writable = match std::fs::create_dir_all(&portable_dir) {
+        Ok(_) => {
+            // Verify write permission by checking subfolder creation
+            std::fs::create_dir_all(portable_dir.join("database")).is_ok()
+        }
+        Err(_) => false,
+    };
+
+    let data_dir = if is_portable_writable {
+        portable_dir
+    } else {
+        // Fallback to user local app data if running from a protected/read-only location
+        if let Some(proj_dirs) = ProjectDirs::from("com", "precision", "ReferenceTracker") {
+            let fallback_dir = proj_dirs.data_local_dir().join("ReferenceTracker_Data");
+            let _ = std::fs::create_dir_all(&fallback_dir);
+            fallback_dir
+        } else {
+            portable_dir
+        }
+    };
+
     let _ = std::fs::create_dir_all(data_dir.join("database"));
     let _ = std::fs::create_dir_all(data_dir.join("references").join("PHOTOS"));
     let _ = std::fs::create_dir_all(data_dir.join("references").join("ATTACHMENTS"));
