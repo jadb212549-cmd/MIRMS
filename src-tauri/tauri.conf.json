@@ -44,9 +44,5 @@
       "timestampUrl": ""
     }
   },
-  "plugins": {
-    "opener": {},
-    "dialog": {},
-    "fs": {}
-  }
+  "plugins": {}
 }
