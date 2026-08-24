@@ -189,125 +189,127 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {/* Individual Performance Table */}
-      <div className="bg-[#121212] rounded-xl border border-[#222] overflow-hidden flex flex-col">
-        <div className="p-4 border-b border-[#222] bg-[#1A1A1A] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              <Users className="w-4 h-4" />
+      {!config?.hidePerformanceTable && (
+        <div className="bg-[#121212] rounded-xl border border-[#222] overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-[#222] bg-[#1A1A1A] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
+                  <span>Individual Performance Table</span>
+                  <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded font-mono font-normal">
+                    {operatorCounters.length} Team Members
+                  </span>
+                </h3>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Clear breakdown per team member with daily tallies against 5 items/day goal
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-xs font-bold text-gray-200 uppercase tracking-wider flex items-center gap-2">
-                <span>Individual Performance Table</span>
-                <span className="text-[10px] text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded font-mono font-normal">
-                  {operatorCounters.length} Team Members
-                </span>
-              </h3>
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                Clear breakdown per team member with daily tallies against 5 items/day goal
-              </p>
+            <div className="text-[11px] font-mono text-gray-400 bg-[#161616] px-3 py-1 rounded-lg border border-[#2A2A2A] flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+              <span>Daily Goal: <strong className="text-white">5 items / day</strong></span>
             </div>
           </div>
-          <div className="text-[11px] font-mono text-gray-400 bg-[#161616] px-3 py-1 rounded-lg border border-[#2A2A2A] flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-400"></span>
-            <span>Daily Goal: <strong className="text-white">5 items / day</strong></span>
-          </div>
+
+          {operatorCounters.length === 0 ? (
+            <div className="p-8 text-center text-xs text-gray-500">
+              No team member registrations logged yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-[#0A0A0A] text-gray-500 uppercase font-mono text-[10px] tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Team Member</th>
+                    <th className="px-4 py-3 font-medium">My Registered Items</th>
+                    <th className="px-4 py-3 font-medium">Target</th>
+                    <th className="px-4 py-3 font-medium">Completion Rate</th>
+                    <th className="px-4 py-3 font-medium text-right">Performance</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#222]">
+                  {operatorCounters.map((op, idx) => {
+                    const rate = op.completionRate;
+
+                    let statusText = 'Below Expectations';
+                    let statusClass = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+                    let barColor = 'bg-rose-400';
+
+                    if (rate >= 120) {
+                      statusText = 'Outstanding';
+                      statusClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                      barColor = 'bg-emerald-400';
+                    } else if (rate >= 100) {
+                      statusText = 'Exceeds Expectations';
+                      statusClass = 'bg-teal-500/10 text-teal-400 border-teal-500/20';
+                      barColor = 'bg-teal-400';
+                    } else if (rate >= 85) {
+                      statusText = 'Meets Expectations';
+                      statusClass = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+                      barColor = 'bg-blue-400';
+                    } else if (rate >= 70) {
+                      statusText = 'Nearly Met Expectations';
+                      statusClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                      barColor = 'bg-amber-400';
+                    }
+
+                    return (
+                      <tr key={op.operator} className="hover:bg-[#1A1A1A] transition-colors">
+                        <td className="px-4 py-3 font-medium text-gray-200">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-[#222] border border-[#333] flex items-center justify-center text-blue-400 font-mono font-bold text-xs shrink-0">
+                              {idx === 0 ? <Award className="w-3.5 h-3.5 text-amber-400" /> : <User className="w-3.5 h-3.5" />}
+                            </div>
+                            <div>
+                              <span className="font-bold text-gray-200 block">{op.operator}</span>
+                              <span className="text-[10px] text-gray-500 font-mono">Started: {op.firstDateStr}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-mono">
+                          <div className="flex items-center gap-3">
+                            <div>
+                              <span className="text-gray-500 block uppercase font-mono text-[9px]">Today</span>
+                              <span className="text-sm font-bold text-blue-400">{op.today}</span>
+                            </div>
+                            <div className="h-6 w-px bg-[#252525]"></div>
+                            <div>
+                              <span className="text-gray-500 block uppercase font-mono text-[9px]">Total</span>
+                              <span className="text-sm font-bold text-gray-200">{op.total}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 font-mono text-gray-300 font-semibold text-xs">
+                          5 items / day
+                        </td>
+                        <td className="px-4 py-3 font-mono">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-200 text-xs">{rate}%</span>
+                            <div className="w-16 bg-[#222] h-1.5 rounded-full overflow-hidden hidden sm:block">
+                              <div
+                                className={`h-1.5 rounded-full ${barColor}`}
+                                style={{ width: `${Math.min(100, rate)}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded text-[11px] font-mono font-bold border ${statusClass}`}>
+                            {statusText}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-
-        {operatorCounters.length === 0 ? (
-          <div className="p-8 text-center text-xs text-gray-500">
-            No team member registrations logged yet.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-[#0A0A0A] text-gray-500 uppercase font-mono text-[10px] tracking-wider">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Team Member</th>
-                  <th className="px-4 py-3 font-medium">My Registered Items</th>
-                  <th className="px-4 py-3 font-medium">Target</th>
-                  <th className="px-4 py-3 font-medium">Completion Rate</th>
-                  <th className="px-4 py-3 font-medium text-right">Performance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#222]">
-                {operatorCounters.map((op, idx) => {
-                  const rate = op.completionRate;
-
-                  let statusText = 'Below Expectations';
-                  let statusClass = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
-                  let barColor = 'bg-rose-400';
-
-                  if (rate >= 120) {
-                    statusText = 'Outstanding';
-                    statusClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
-                    barColor = 'bg-emerald-400';
-                  } else if (rate >= 100) {
-                    statusText = 'Exceeds Expectations';
-                    statusClass = 'bg-teal-500/10 text-teal-400 border-teal-500/20';
-                    barColor = 'bg-teal-400';
-                  } else if (rate >= 85) {
-                    statusText = 'Meets Expectations';
-                    statusClass = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
-                    barColor = 'bg-blue-400';
-                  } else if (rate >= 70) {
-                    statusText = 'Nearly Met Expectations';
-                    statusClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-                    barColor = 'bg-amber-400';
-                  }
-
-                  return (
-                    <tr key={op.operator} className="hover:bg-[#1A1A1A] transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-200">
-                        <div className="flex items-center gap-2">
-                          <div className="w-7 h-7 rounded-full bg-[#222] border border-[#333] flex items-center justify-center text-blue-400 font-mono font-bold text-xs shrink-0">
-                            {idx === 0 ? <Award className="w-3.5 h-3.5 text-amber-400" /> : <User className="w-3.5 h-3.5" />}
-                          </div>
-                          <div>
-                            <span className="font-bold text-gray-200 block">{op.operator}</span>
-                            <span className="text-[10px] text-gray-500 font-mono">Started: {op.firstDateStr}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        <div className="flex items-center gap-3">
-                          <div>
-                            <span className="text-gray-500 block uppercase font-mono text-[9px]">Today</span>
-                            <span className="text-sm font-bold text-blue-400">{op.today}</span>
-                          </div>
-                          <div className="h-6 w-px bg-[#252525]"></div>
-                          <div>
-                            <span className="text-gray-500 block uppercase font-mono text-[9px]">Total</span>
-                            <span className="text-sm font-bold text-gray-200">{op.total}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-gray-300 font-semibold text-xs">
-                        5 items / day
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-gray-200 text-xs">{rate}%</span>
-                          <div className="w-16 bg-[#222] h-1.5 rounded-full overflow-hidden hidden sm:block">
-                            <div
-                              className={`h-1.5 rounded-full ${barColor}`}
-                              style={{ width: `${Math.min(100, rate)}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded text-[11px] font-mono font-bold border ${statusClass}`}>
-                          {statusText}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Top Metric Cards - 5 Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">

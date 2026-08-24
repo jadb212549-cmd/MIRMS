@@ -154,6 +154,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   );
   const [syncEnabled, setSyncEnabled] = useState(config.sharedFolderSyncEnabled ?? true);
   const [autoSyncInterval, setAutoSyncInterval] = useState(config.autoSyncIntervalSec || 3);
+  const [hidePerformanceTable, setHidePerformanceTable] = useState(config.hidePerformanceTable ?? false);
 
   // Modals & Notifications
   const [isCustomFieldsModalOpen, setIsCustomFieldsModalOpen] = useState(false);
@@ -189,6 +190,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     if (config.workstationName) setWorkstationName(config.workstationName);
     if (config.sharedFolderSyncEnabled !== undefined) setSyncEnabled(config.sharedFolderSyncEnabled);
     if (config.autoSyncIntervalSec !== undefined) setAutoSyncInterval(config.autoSyncIntervalSec);
+    if (config.hidePerformanceTable !== undefined) setHidePerformanceTable(config.hidePerformanceTable);
   }, [config]);
 
   // Handle manual force sync
@@ -227,7 +229,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         defaultRegisteredBy: defaultInspector.trim(),
         workstationName: workstationName.trim(),
         sharedFolderSyncEnabled: syncEnabled,
-        autoSyncIntervalSec: Number(autoSyncInterval)
+        autoSyncIntervalSec: Number(autoSyncInterval),
+        hidePerformanceTable: hidePerformanceTable
       };
 
       await onConfigChange(updated);
@@ -1592,6 +1595,23 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
                 onChange={(e) => setWorkstationName(e.target.value)}
                 className="w-full px-3.5 py-2 text-xs bg-[#1C1C1C] border border-[#333] text-white rounded-xl focus:outline-hidden focus:border-blue-500 font-medium"
               />
+            </div>
+
+            <div className="space-y-1.5 pt-2 border-t border-[#222]">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hidePerformanceTable}
+                  onChange={(e) => setHidePerformanceTable(e.target.checked)}
+                  className="rounded bg-[#1C1C1C] border-[#333] text-blue-500 focus:ring-blue-500 focus:ring-offset-0 w-4 h-4"
+                />
+                <div>
+                  <span className="text-xs font-bold text-gray-200 block">Hide Individual Performance Table</span>
+                  <span className="text-[10px] text-gray-500 font-medium block mt-0.5">
+                    Hides the team members' registration totals and target breakdown from the main Dashboard view.
+                  </span>
+                </div>
+              </label>
             </div>
 
             <div className="pt-3">

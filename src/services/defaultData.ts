@@ -448,7 +448,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   adminCanAutoApproveOwnRevisions: true,
   requireApprovalForRevisions: true,
   requireAdminApprovalForNewRegistrations: true,
-  hiddenDashboardProductCodes: []
+  hiddenDashboardProductCodes: [],
+  hidePerformanceTable: false
 };
 
 export const INITIAL_MASTER_ITEMS: MasterItem[] = [

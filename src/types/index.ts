@@ -243,6 +243,7 @@ export interface AppConfig {
   requireApprovalForRevisions?: boolean;
   requireAdminApprovalForNewRegistrations?: boolean;
   hiddenDashboardProductCodes?: string[];
+  hidePerformanceTable?: boolean;
 }
 
 export interface DailyAutoBackupRecord {

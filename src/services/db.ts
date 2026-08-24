@@ -175,6 +175,27 @@ class DatabaseService {
             this.registrations = data.registrations || [];
             this.auditLogs = data.auditLogs || [];
             this.config = data.config || DEFAULT_CONFIG;
+
+            // Load templates from persistent local store in Tauri environment
+            const storedTemplates = localStorage.getItem(STORAGE_KEYS.FORM_TEMPLATES);
+            if (storedTemplates) {
+              try {
+                const parsedTemplates = JSON.parse(storedTemplates);
+                if (Array.isArray(parsedTemplates) && parsedTemplates.length > 0) {
+                  this.formTemplates = parsedTemplates;
+                } else {
+                  this.formTemplates = [...INITIAL_FORM_TEMPLATES];
+                  this.saveFormTemplatesLocal();
+                }
+              } catch {
+                this.formTemplates = [...INITIAL_FORM_TEMPLATES];
+                this.saveFormTemplatesLocal();
+              }
+            } else {
+              this.formTemplates = [...INITIAL_FORM_TEMPLATES];
+              this.saveFormTemplatesLocal();
+            }
+
             this.initialized = true;
             this.notifyListeners();
             return;
