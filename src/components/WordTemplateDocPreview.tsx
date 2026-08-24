@@ -3,6 +3,7 @@ import { renderAsync } from 'docx-preview';
 import { AppConfig, MasterItem, ReferenceRegistration, WordDocPlaceholder } from '../types';
 import { wordService } from '../services/wordService';
 import { pdfService } from '../services/pdfService';
+import { PdfViewer } from './PdfViewer';
 import {
   FileText,
   Download,

@@ -1731,8 +1731,15 @@ class DatabaseService {
     }
 
     const target = this.formTemplates[targetIndex];
-    if (target.isBuiltIn) {
-      return { success: false, message: 'Built-in system templates cannot be deleted.' };
+    const sameTypeTemplates = this.formTemplates.filter(t => t.formType === target.formType);
+
+    if (sameTypeTemplates.length <= 1) {
+      return {
+        success: false,
+        message: `Cannot delete "${target.name}". At least one template must remain for ${
+          target.formType === 'material_reference_sheet' ? 'Material Reference Sheets' : 'Inspection Proof Slips'
+        }. Import or create another template first.`
+      };
     }
 
     const wasActive = target.isActive;

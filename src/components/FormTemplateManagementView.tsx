@@ -23,6 +23,7 @@ import {
 import {
   pdfService
 } from '../services/pdfService';
+import { PdfViewer } from './PdfViewer';
 import {
   LayoutTemplate,
   Plus,
@@ -264,14 +265,21 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
       return;
     }
 
-    if (template.isBuiltIn) {
-      onNotify?.('Protected Template', 'Built-in default system templates cannot be deleted.', 'warning');
+    const sameTypeCount = templates.filter(t => t.formType === template.formType).length;
+    if (sameTypeCount <= 1) {
+      onNotify?.(
+        'Cannot Delete Template',
+        `At least one template must remain for ${
+          template.formType === 'material_reference_sheet' ? 'Material Reference Sheets' : 'Inspection Proof Slips'
+        }.`,
+        'warning'
+      );
       return;
     }
 
     if (template.isActive) {
       const confirmDelete = window.confirm(
-        `"${template.name}" is currently ACTIVE. Deleting it will automatically revert to the default built-in template. Continue?`
+        `"${template.name}" is currently ACTIVE. Deleting it will automatically revert active status to a fallback template. Continue?`
       );
       if (!confirmDelete) return;
     } else {
@@ -280,12 +288,27 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
     }
 
     try {
-      await db.deleteFormTemplate(template.id);
+      const res = await db.deleteFormTemplate(
+        template.id,
+        currentUser ? `${currentUser.shortName} (${currentUser.fullName})` : 'Administrator'
+      );
+
+      if (res && !res.success) {
+        onNotify?.('Delete Error', res.message || 'Failed to delete template', 'warning');
+        return;
+      }
+
       await loadTemplates();
-      onNotify?.('Template Deleted', `Template "${template.name}" was removed.`, 'info');
-    } catch (err) {
+
+      if (selectedTemplate?.id === template.id) {
+        setIsPreviewModalOpen(false);
+        setSelectedTemplate(null);
+      }
+
+      onNotify?.('Template Deleted', `Template "${template.name}" was successfully removed.`, 'info');
+    } catch (err: any) {
       console.error('Failed to delete template:', err);
-      onNotify?.('Error', 'Failed to delete template', 'warning');
+      onNotify?.('Error', err?.message || 'Failed to delete template', 'warning');
     }
   };
 
@@ -918,7 +941,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                        {!template.isBuiltIn && (
+                        {templates.filter(t => t.formType === template.formType).length > 1 && (
                           <button
                             onClick={() => handleDelete(template)}
                             className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
@@ -1400,10 +1423,11 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
             {/* Body Preview */}
             <div className="p-6 overflow-y-auto flex-1 bg-[#1A1A1A] flex justify-center">
               {selectedTemplate.fileType === 'pdf' && selectedTemplate.fileContent ? (
-                <iframe
-                  src={`data:application/pdf;base64,${selectedTemplate.fileContent}`}
-                  className="w-full h-[600px] rounded-lg border border-[#333]"
-                  title={selectedTemplate.name}
+                <PdfViewer
+                  base64={selectedTemplate.fileContent}
+                  fileName={selectedTemplate.fileName || selectedTemplate.name}
+                  height="600px"
+                  className="w-full max-w-4xl"
                 />
               ) : selectedTemplate.fileType === 'docx' ? (
                 <DocxModalPreview template={selectedTemplate} config={config} sampleDict={sampleDict} />
@@ -1423,6 +1447,16 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
                 Format: {selectedTemplate.fileType.toUpperCase()} • Status: {selectedTemplate.isActive ? 'Active' : 'Inactive'}
               </div>
               <div className="flex items-center gap-2">
+                {isAdmin && templates.filter(t => t.formType === selectedTemplate.formType).length > 1 && (
+                  <button
+                    onClick={() => handleDelete(selectedTemplate)}
+                    className="px-3 py-1.5 text-xs font-semibold bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-500/30 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                    title="Delete this template"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => {
