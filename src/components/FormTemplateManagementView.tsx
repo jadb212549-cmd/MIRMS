@@ -6,7 +6,8 @@ import {
   SystemFieldOption,
   AppConfig,
   MasterItem,
-  ReferenceRegistration
+  ReferenceRegistration,
+  PdfCoordinateMapping
 } from '../types';
 import {
   db
@@ -197,6 +198,24 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
 
   const [templateToDelete, setTemplateToDelete] = useState<FormTemplate | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
+  // PDF mapping state variables
+  const [pdfCoordinateMappings, setPdfCoordinateMappings] = useState<Record<string, PdfCoordinateMapping>>({});
+  const [detectedPdfFormFields, setDetectedPdfFormFields] = useState<string[]>([]);
+  const [pdfMappingTab, setPdfMappingTab] = useState<'forms' | 'coordinates'>('forms');
+
+  useEffect(() => {
+    if (importFileType === 'pdf' && importFileContent) {
+      pdfService.parsePdfFormFields(importFileContent).then(fields => {
+        setDetectedPdfFormFields(fields);
+      }).catch(err => {
+        console.warn('PDF parse failed:', err);
+        setDetectedPdfFormFields([]);
+      });
+    } else {
+      setDetectedPdfFormFields([]);
+    }
+  }, [importFileType, importFileContent]);
 
   // Filter templates
   const filteredTemplates = templates.filter(t => {
@@ -473,6 +492,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
         fileContent: importFileContent,
         customCss: importCustomCss,
         fieldMappings: importMappings,
+        pdfCoordinateMappings: Object.keys(pdfCoordinateMappings).length > 0 ? pdfCoordinateMappings : undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: currentUser ? `${currentUser.shortName} (${currentUser.fullName})` : 'Administrator',
@@ -508,6 +528,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
     setImportFileContent('');
     setImportCustomCss('');
     setImportMappings({});
+    setPdfCoordinateMappings({});
     setSetAsActiveOnSave(true);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -524,6 +545,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
     setImportFileContent(template.fileContent || '');
     setImportCustomCss(template.customCss || '');
     setImportMappings({ ...template.fieldMappings });
+    setPdfCoordinateMappings(template.pdfCoordinateMappings || {});
     setIsEditModalOpen(true);
   };
 
@@ -543,6 +565,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
         fileContent: importFileContent,
         customCss: importCustomCss,
         fieldMappings: importMappings,
+        pdfCoordinateMappings: Object.keys(pdfCoordinateMappings).length > 0 ? pdfCoordinateMappings : undefined,
         updatedAt: new Date().toISOString()
       };
 
@@ -1153,49 +1176,351 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
               </div>
 
               {/* Field Mappings Preview Table */}
-              {Object.keys(importMappings).length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs font-semibold text-gray-300">
-                      Detected Field Placeholders & Mappings ({Object.keys(importMappings).length})
-                    </label>
-                    <span className="text-[10px] text-gray-500 font-mono">
-                      Template Placeholder &rarr; System Field
-                    </span>
+              {importFileType === 'pdf' ? (
+                <div className="space-y-4 border border-[#282828] rounded-2xl p-4 bg-[#111111]">
+                  <div className="flex items-center justify-between border-b border-[#222] pb-2">
+                    <div className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                      PDF Document Field Mapper
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPdfMappingTab('forms')}
+                        className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                          pdfMappingTab === 'forms'
+                            ? 'bg-blue-600/15 border-blue-500/35 text-blue-400'
+                            : 'bg-transparent border-[#2F2F2F] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        AcroForm Fields
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPdfMappingTab('coordinates')}
+                        className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                          pdfMappingTab === 'coordinates'
+                            ? 'bg-blue-600/15 border-blue-500/35 text-blue-400'
+                            : 'bg-transparent border-[#2F2F2F] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        Stamp Coordinates
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="border border-[#282828] rounded-xl bg-[#181818] p-3 max-h-48 overflow-y-auto space-y-2">
-                    {Object.entries(importMappings).map(([placeholder, systemKey]) => (
-                      <div
-                        key={placeholder}
-                        className="flex items-center justify-between gap-2 p-1.5 bg-[#141414] rounded-lg border border-[#222]"
-                      >
-                        <code className="text-xs font-mono font-bold text-blue-300">
-                          {placeholder}
-                        </code>
-                        <div className="flex items-center gap-1.5">
-                          <ArrowRight className="w-3.5 h-3.5 text-gray-500" />
-                          <select
-                            value={systemKey}
-                            onChange={(e) => {
+                  {pdfMappingTab === 'forms' ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-gray-400 text-[10px]">
+                          Map predefined PDF Form fields directly to dynamic database properties.
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const fName = prompt('Enter predefined PDF form field name (e.g. InspectorSignature):');
+                            if (fName && fName.trim()) {
                               setImportMappings({
                                 ...importMappings,
-                                [placeholder]: e.target.value
+                                [fName.trim()]: 'productCode'
                               });
-                            }}
-                            className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded-md px-2 py-1 focus:outline-hidden focus:border-blue-500"
-                          >
-                            {SYSTEM_FIELD_OPTIONS.map((opt) => (
-                              <option key={opt.key} value={opt.key}>
-                                {opt.label} ({opt.key})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                            }
+                          }}
+                          className="text-[10px] text-blue-400 hover:text-blue-350 flex items-center gap-1 cursor-pointer font-mono font-semibold"
+                        >
+                          <Plus className="w-3 h-3" /> Map Manual Field
+                        </button>
                       </div>
-                    ))}
-                  </div>
+
+                      {detectedPdfFormFields.length === 0 && Object.keys(importMappings).length === 0 ? (
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl text-center">
+                          <AlertCircle className="w-4 h-4 mx-auto mb-1" />
+                          <div className="font-semibold text-[11px]">No Interactive PDF Fields Found</div>
+                          <p className="text-[10px] text-gray-400 mt-0.5 max-w-sm mx-auto">
+                            We didn't detect fillable form objects. Switch to <strong>"Stamp Coordinates"</strong> above to drop text onto coordinates.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="border border-[#282828] rounded-xl bg-[#161616] p-2.5 max-h-56 overflow-y-auto space-y-2">
+                          {/* Detected Interactive Fields */}
+                          {detectedPdfFormFields.map(fName => {
+                            const systemKey = importMappings[fName] || '';
+                            return (
+                              <div key={fName} className="flex items-center justify-between gap-2 p-1.5 bg-[#121212] rounded-lg border border-[#222]">
+                                <div className="flex items-center gap-1.5">
+                                  <code className="text-xs font-mono font-bold text-blue-300">{fName}</code>
+                                  <span className="text-[8px] tracking-wide uppercase font-bold text-green-400 bg-green-500/10 border border-green-500/20 rounded px-1 font-mono">
+                                    Detected
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <ArrowRight className="w-3 h-3 text-gray-500" />
+                                  <select
+                                    value={systemKey}
+                                    onChange={(e) => {
+                                      setImportMappings({
+                                        ...importMappings,
+                                        [fName]: e.target.value
+                                      });
+                                    }}
+                                    className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded-md px-2 py-0.5 focus:outline-hidden focus:border-blue-500"
+                                  >
+                                    <option value="">-- Do Not Map --</option>
+                                    {SYSTEM_FIELD_OPTIONS.map((opt) => (
+                                      <option key={opt.key} value={opt.key}>
+                                        {opt.label} ({opt.key})
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Manually Mapped Interactive Fields */}
+                          {Object.entries(importMappings)
+                            .filter(([placeholder]) => !detectedPdfFormFields.includes(placeholder))
+                            .map(([placeholder, systemKey]) => (
+                              <div key={placeholder} className="flex items-center justify-between gap-2 p-1.5 bg-[#121212] rounded-lg border border-[#222]">
+                                <div className="flex items-center gap-1.5">
+                                  <code className="text-xs font-mono font-bold text-blue-300">{placeholder}</code>
+                                  <span className="text-[8px] tracking-wide uppercase font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1 font-mono">
+                                    Manual
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <ArrowRight className="w-3 h-3 text-gray-500" />
+                                  <select
+                                    value={systemKey}
+                                    onChange={(e) => {
+                                      setImportMappings({
+                                        ...importMappings,
+                                        [placeholder]: e.target.value
+                                      });
+                                    }}
+                                    className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded-md px-2 py-0.5 focus:outline-hidden focus:border-blue-500"
+                                  >
+                                    {SYSTEM_FIELD_OPTIONS.map((opt) => (
+                                      <option key={opt.key} value={opt.key}>
+                                        {opt.label} ({opt.key})
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const copy = { ...importMappings };
+                                      delete copy[placeholder];
+                                      setImportMappings(copy);
+                                    }}
+                                    className="p-1 text-gray-500 hover:text-red-400 rounded transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-gray-400 text-[10px]">
+                          Draw dynamic text fields at exact Cartesian coordinates (X, Y in PDF points relative to bottom-left).
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const systemKey = 'productCode';
+                            const randId = `stamp_${Date.now().toString(36)}`;
+                            setPdfCoordinateMappings({
+                              ...pdfCoordinateMappings,
+                              [randId]: {
+                                systemKey,
+                                page: 1,
+                                x: 100,
+                                y: 700,
+                                fontSize: 10,
+                                textColor: '#000000'
+                              }
+                            });
+                          }}
+                          className="text-[10px] text-blue-400 hover:text-blue-355 flex items-center gap-1 cursor-pointer font-mono font-semibold"
+                        >
+                          <Plus className="w-3 h-3" /> Add Stamp Position
+                        </button>
+                      </div>
+
+                      {Object.keys(pdfCoordinateMappings).length === 0 ? (
+                        <div className="p-6 border border-dashed border-[#333] rounded-xl text-center text-gray-500 text-[11px] font-mono">
+                          No coordinates mapped yet. Click "Add Stamp Position" above to map your first field.
+                        </div>
+                      ) : (
+                        <div className="border border-[#282828] rounded-xl bg-[#161616] p-2.5 max-h-60 overflow-y-auto space-y-2.5">
+                          {Object.entries(pdfCoordinateMappings).map(([id, mapping]) => (
+                            <div key={id} className="p-2.5 bg-[#121212] rounded-lg border border-[#222] space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Attribute:</span>
+                                  <select
+                                    value={mapping.systemKey}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, systemKey: e.target.value }
+                                      });
+                                    }}
+                                    className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 focus:border-blue-500 focus:outline-hidden"
+                                  >
+                                    {SYSTEM_FIELD_OPTIONS.map((opt) => (
+                                      <option key={opt.key} value={opt.key}>
+                                        {opt.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const copy = { ...pdfCoordinateMappings };
+                                    delete copy[id];
+                                    setPdfCoordinateMappings(copy);
+                                  }}
+                                  className="p-1 text-gray-500 hover:text-red-400 rounded transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-5 gap-1.5 items-center">
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">Page</label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={mapping.page}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, page: parseInt(e.target.value) || 1 }
+                                      });
+                                    }}
+                                    className="w-full text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 text-center focus:border-blue-500 focus:outline-hidden"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">X (pt)</label>
+                                  <input
+                                    type="number"
+                                    value={mapping.x}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, x: parseFloat(e.target.value) || 0 }
+                                      });
+                                    }}
+                                    className="w-full text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 text-center focus:border-blue-500 focus:outline-hidden"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">Y (pt)</label>
+                                  <input
+                                    type="number"
+                                    value={mapping.y}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, y: parseFloat(e.target.value) || 0 }
+                                      });
+                                    }}
+                                    className="w-full text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 text-center focus:border-blue-500 focus:outline-hidden"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">Size</label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={mapping.fontSize || 10}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, fontSize: parseInt(e.target.value) || 10 }
+                                      });
+                                    }}
+                                    className="w-full text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 text-center focus:border-blue-500 focus:outline-hidden"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">Color</label>
+                                  <div className="flex items-center gap-1 justify-center">
+                                    <input
+                                      type="color"
+                                      value={mapping.textColor || '#000000'}
+                                      onChange={(e) => {
+                                        setPdfCoordinateMappings({
+                                          ...pdfCoordinateMappings,
+                                          [id]: { ...mapping, textColor: e.target.value }
+                                        });
+                                      }}
+                                      className="w-5 h-5 border border-[#333] bg-transparent rounded cursor-pointer p-0"
+                                    />
+                                    <span className="text-[8px] font-mono text-gray-400">{mapping.textColor || '#000000'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+              ) : (
+                Object.keys(importMappings).length > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-semibold text-gray-300">
+                        Detected Field Placeholders & Mappings ({Object.keys(importMappings).length})
+                      </label>
+                      <span className="text-[10px] text-gray-500 font-mono">
+                        Template Placeholder &rarr; System Field
+                      </span>
+                    </div>
+
+                    <div className="border border-[#282828] rounded-xl bg-[#181818] p-3 max-h-48 overflow-y-auto space-y-2">
+                      {Object.entries(importMappings).map(([placeholder, systemKey]) => (
+                        <div
+                          key={placeholder}
+                          className="flex items-center justify-between gap-2 p-1.5 bg-[#141414] rounded-lg border border-[#222]"
+                        >
+                          <code className="text-xs font-mono font-bold text-blue-300">
+                            {placeholder}
+                          </code>
+                          <div className="flex items-center gap-1.5">
+                            <ArrowRight className="w-3.5 h-3.5 text-gray-500" />
+                            <select
+                              value={systemKey}
+                              onChange={(e) => {
+                                setImportMappings({
+                                  ...importMappings,
+                                  [placeholder]: e.target.value
+                                });
+                              }}
+                              className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded-md px-2 py-1 focus:outline-hidden focus:border-blue-500"
+                            >
+                              {SYSTEM_FIELD_OPTIONS.map((opt) => (
+                                <option key={opt.key} value={opt.key}>
+                                  {opt.label} ({opt.key})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
               )}
 
               {/* Active Toggle */}
@@ -1304,73 +1629,375 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
               </div>
 
               {/* Field Mappings Editor */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-gray-300">
-                    Field Mappings ({Object.keys(importMappings).length})
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newTag = prompt('Enter placeholder tag (e.g. {{custom_tag}}):');
-                      if (newTag && newTag.trim()) {
-                        const formatted = newTag.startsWith('{{') ? newTag.trim() : `{{${newTag.trim()}}}`;
-                        setImportMappings({
-                          ...importMappings,
-                          [formatted]: 'productCode'
-                        });
-                      }
-                    }}
-                    className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-mono cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" /> Add Placeholder
-                  </button>
-                </div>
+              {importFileType === 'pdf' ? (
+                <div className="space-y-4 border border-[#282828] rounded-2xl p-4 bg-[#111111]">
+                  <div className="flex items-center justify-between border-b border-[#222] pb-2">
+                    <div className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                      PDF Document Field Mapper
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPdfMappingTab('forms')}
+                        className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                          pdfMappingTab === 'forms'
+                            ? 'bg-blue-600/15 border-blue-500/35 text-blue-400'
+                            : 'bg-transparent border-[#2F2F2F] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        AcroForm Fields
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPdfMappingTab('coordinates')}
+                        className={`px-3 py-1 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                          pdfMappingTab === 'coordinates'
+                            ? 'bg-blue-600/15 border-blue-500/35 text-blue-400'
+                            : 'bg-transparent border-[#2F2F2F] text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        Stamp Coordinates
+                      </button>
+                    </div>
+                  </div>
 
-                <div className="border border-[#282828] rounded-xl bg-[#181818] p-3 max-h-56 overflow-y-auto space-y-2">
-                  {Object.entries(importMappings).map(([placeholder, systemKey]) => (
-                    <div
-                      key={placeholder}
-                      className="flex items-center justify-between gap-2 p-1.5 bg-[#141414] rounded-lg border border-[#222]"
-                    >
-                      <code className="text-xs font-mono font-bold text-blue-300">
-                        {placeholder}
-                      </code>
-                      <div className="flex items-center gap-1.5">
-                        <ArrowRight className="w-3.5 h-3.5 text-gray-500" />
-                        <select
-                          value={systemKey}
-                          onChange={(e) => {
-                            setImportMappings({
-                              ...importMappings,
-                              [placeholder]: e.target.value
-                            });
-                          }}
-                          className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded-md px-2 py-1 focus:outline-hidden focus:border-blue-500"
-                        >
-                          {SYSTEM_FIELD_OPTIONS.map((opt) => (
-                            <option key={opt.key} value={opt.key}>
-                              {opt.label} ({opt.key})
-                            </option>
-                          ))}
-                        </select>
+                  {pdfMappingTab === 'forms' ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-gray-400 text-[10px]">
+                          Map predefined PDF Form fields directly to dynamic database properties.
+                        </div>
                         <button
                           type="button"
                           onClick={() => {
-                            const copy = { ...importMappings };
-                            delete copy[placeholder];
-                            setImportMappings(copy);
+                            const fName = prompt('Enter predefined PDF form field name (e.g. InspectorSignature):');
+                            if (fName && fName.trim()) {
+                              setImportMappings({
+                                ...importMappings,
+                                [fName.trim()]: 'productCode'
+                              });
+                            }
                           }}
-                          className="p-1 text-gray-500 hover:text-red-400 rounded transition-colors"
-                          title="Remove mapping"
+                          className="text-[10px] text-blue-400 hover:text-blue-350 flex items-center gap-1 cursor-pointer font-mono font-semibold"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Plus className="w-3 h-3" /> Map Manual Field
                         </button>
                       </div>
+
+                      {detectedPdfFormFields.length === 0 && Object.keys(importMappings).length === 0 ? (
+                        <div className="p-4 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl text-center">
+                          <AlertCircle className="w-4 h-4 mx-auto mb-1" />
+                          <div className="font-semibold text-[11px]">No Interactive PDF Fields Found</div>
+                          <p className="text-[10px] text-gray-400 mt-0.5 max-w-sm mx-auto">
+                            We didn't detect fillable form objects. Switch to <strong>"Stamp Coordinates"</strong> above to drop text onto coordinates.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="border border-[#282828] rounded-xl bg-[#161616] p-2.5 max-h-56 overflow-y-auto space-y-2">
+                          {/* Detected Interactive Fields */}
+                          {detectedPdfFormFields.map(fName => {
+                            const systemKey = importMappings[fName] || '';
+                            return (
+                              <div key={fName} className="flex items-center justify-between gap-2 p-1.5 bg-[#121212] rounded-lg border border-[#222]">
+                                <div className="flex items-center gap-1.5">
+                                  <code className="text-xs font-mono font-bold text-blue-300">{fName}</code>
+                                  <span className="text-[8px] tracking-wide uppercase font-bold text-green-400 bg-green-500/10 border border-green-500/20 rounded px-1 font-mono">
+                                    Detected
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <ArrowRight className="w-3 h-3 text-gray-500" />
+                                  <select
+                                    value={systemKey}
+                                    onChange={(e) => {
+                                      setImportMappings({
+                                        ...importMappings,
+                                        [fName]: e.target.value
+                                      });
+                                    }}
+                                    className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded-md px-2 py-0.5 focus:outline-hidden focus:border-blue-500"
+                                  >
+                                    <option value="">-- Do Not Map --</option>
+                                    {SYSTEM_FIELD_OPTIONS.map((opt) => (
+                                      <option key={opt.key} value={opt.key}>
+                                        {opt.label} ({opt.key})
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+                            );
+                          })}
+
+                          {/* Manually Mapped Interactive Fields */}
+                          {Object.entries(importMappings)
+                            .filter(([placeholder]) => !detectedPdfFormFields.includes(placeholder))
+                            .map(([placeholder, systemKey]) => (
+                              <div key={placeholder} className="flex items-center justify-between gap-2 p-1.5 bg-[#121212] rounded-lg border border-[#222]">
+                                <div className="flex items-center gap-1.5">
+                                  <code className="text-xs font-mono font-bold text-blue-300">{placeholder}</code>
+                                  <span className="text-[8px] tracking-wide uppercase font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1 font-mono">
+                                    Manual
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <ArrowRight className="w-3 h-3 text-gray-500" />
+                                  <select
+                                    value={systemKey}
+                                    onChange={(e) => {
+                                      setImportMappings({
+                                        ...importMappings,
+                                        [placeholder]: e.target.value
+                                      });
+                                    }}
+                                    className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded-md px-2 py-0.5 focus:outline-hidden focus:border-blue-500"
+                                  >
+                                    {SYSTEM_FIELD_OPTIONS.map((opt) => (
+                                      <option key={opt.key} value={opt.key}>
+                                        {opt.label} ({opt.key})
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const copy = { ...importMappings };
+                                      delete copy[placeholder];
+                                      setImportMappings(copy);
+                                    }}
+                                    className="p-1 text-gray-500 hover:text-red-400 rounded transition-colors"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-gray-400 text-[10px]">
+                          Draw dynamic text fields at exact Cartesian coordinates (X, Y in PDF points relative to bottom-left).
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const systemKey = 'productCode';
+                            const randId = `stamp_${Date.now().toString(36)}`;
+                            setPdfCoordinateMappings({
+                              ...pdfCoordinateMappings,
+                              [randId]: {
+                                systemKey,
+                                page: 1,
+                                x: 100,
+                                y: 700,
+                                fontSize: 10,
+                                textColor: '#000000'
+                              }
+                            });
+                          }}
+                          className="text-[10px] text-blue-400 hover:text-blue-355 flex items-center gap-1 cursor-pointer font-mono font-semibold"
+                        >
+                          <Plus className="w-3 h-3" /> Add Stamp Position
+                        </button>
+                      </div>
+
+                      {Object.keys(pdfCoordinateMappings).length === 0 ? (
+                        <div className="p-6 border border-dashed border-[#333] rounded-xl text-center text-gray-500 text-[11px] font-mono">
+                          No coordinates mapped yet. Click "Add Stamp Position" above to map your first field.
+                        </div>
+                      ) : (
+                        <div className="border border-[#282828] rounded-xl bg-[#161616] p-2.5 max-h-60 overflow-y-auto space-y-2.5">
+                          {Object.entries(pdfCoordinateMappings).map(([id, mapping]) => (
+                            <div key={id} className="p-2.5 bg-[#121212] rounded-lg border border-[#222] space-y-2">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Attribute:</span>
+                                  <select
+                                    value={mapping.systemKey}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, systemKey: e.target.value }
+                                      });
+                                    }}
+                                    className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 focus:border-blue-500 focus:outline-hidden"
+                                  >
+                                    {SYSTEM_FIELD_OPTIONS.map((opt) => (
+                                      <option key={opt.key} value={opt.key}>
+                                        {opt.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const copy = { ...pdfCoordinateMappings };
+                                    delete copy[id];
+                                    setPdfCoordinateMappings(copy);
+                                  }}
+                                  className="p-1 text-gray-500 hover:text-red-400 rounded transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-5 gap-1.5 items-center">
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">Page</label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={mapping.page}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, page: parseInt(e.target.value) || 1 }
+                                      });
+                                    }}
+                                    className="w-full text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 text-center focus:border-blue-500 focus:outline-hidden"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">X (pt)</label>
+                                  <input
+                                    type="number"
+                                    value={mapping.x}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, x: parseFloat(e.target.value) || 0 }
+                                      });
+                                    }}
+                                    className="w-full text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 text-center focus:border-blue-500 focus:outline-hidden"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">Y (pt)</label>
+                                  <input
+                                    type="number"
+                                    value={mapping.y}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, y: parseFloat(e.target.value) || 0 }
+                                      });
+                                    }}
+                                    className="w-full text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 text-center focus:border-blue-500 focus:outline-hidden"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">Size</label>
+                                  <input
+                                    type="number"
+                                    min={1}
+                                    value={mapping.fontSize || 10}
+                                    onChange={(e) => {
+                                      setPdfCoordinateMappings({
+                                        ...pdfCoordinateMappings,
+                                        [id]: { ...mapping, fontSize: parseInt(e.target.value) || 10 }
+                                      });
+                                    }}
+                                    className="w-full text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded px-1.5 py-0.5 text-center focus:border-blue-500 focus:outline-hidden"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[8px] text-gray-500 font-bold uppercase mb-0.5">Color</label>
+                                  <div className="flex items-center gap-1 justify-center">
+                                    <input
+                                      type="color"
+                                      value={mapping.textColor || '#000000'}
+                                      onChange={(e) => {
+                                        setPdfCoordinateMappings({
+                                          ...pdfCoordinateMappings,
+                                          [id]: { ...mapping, textColor: e.target.value }
+                                        });
+                                      }}
+                                      className="w-5 h-5 border border-[#333] bg-transparent rounded cursor-pointer p-0"
+                                    />
+                                    <span className="text-[8px] font-mono text-gray-400">{mapping.textColor || '#000000'}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-gray-300">
+                      Field Mappings ({Object.keys(importMappings).length})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newTag = prompt('Enter placeholder tag (e.g. {{custom_tag}}):');
+                        if (newTag && newTag.trim()) {
+                          const formatted = newTag.startsWith('{{') ? newTag.trim() : `{{${newTag.trim()}}}`;
+                          setImportMappings({
+                            ...importMappings,
+                            [formatted]: 'productCode'
+                          });
+                        }
+                      }}
+                      className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-mono cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" /> Add Placeholder
+                    </button>
+                  </div>
+
+                  <div className="border border-[#282828] rounded-xl bg-[#181818] p-3 max-h-56 overflow-y-auto space-y-2">
+                    {Object.entries(importMappings).map(([placeholder, systemKey]) => (
+                      <div
+                        key={placeholder}
+                        className="flex items-center justify-between gap-2 p-1.5 bg-[#141414] rounded-lg border border-[#222]"
+                      >
+                        <code className="text-xs font-mono font-bold text-blue-300">
+                          {placeholder}
+                        </code>
+                        <div className="flex items-center gap-1.5">
+                          <ArrowRight className="w-3.5 h-3.5 text-gray-500" />
+                          <select
+                            value={systemKey}
+                            onChange={(e) => {
+                              setImportMappings({
+                                ...importMappings,
+                                [placeholder]: e.target.value
+                              });
+                            }}
+                            className="text-xs font-mono bg-[#1E1E1E] text-white border border-[#333] rounded-md px-2 py-1 focus:outline-hidden focus:border-blue-500"
+                          >
+                            {SYSTEM_FIELD_OPTIONS.map((opt) => (
+                              <option key={opt.key} value={opt.key}>
+                                {opt.label} ({opt.key})
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const copy = { ...importMappings };
+                              delete copy[placeholder];
+                              setImportMappings(copy);
+                            }}
+                            className="p-1 text-gray-500 hover:text-red-400 rounded transition-colors"
+                            title="Remove mapping"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}

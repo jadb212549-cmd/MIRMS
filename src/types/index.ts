@@ -285,6 +285,16 @@ export interface DashboardStats {
 
 export type FormType = 'material_reference_sheet' | 'inspection_proof_slip';
 
+export interface PdfCoordinateMapping {
+  systemKey: string;     // System field key (e.g. "productCode")
+  page: number;         // 1-indexed page number
+  x: number;            // X coordinate in points
+  y: number;            // Y coordinate in points
+  fontSize?: number;    // font size in points
+  textColor?: string;   // color hex code
+  useFormFieldName?: string; // if mapping to an interactive form field instead of direct X/Y stamping
+}
+
 export interface FormTemplate {
   id: string;
   name: string;
@@ -295,8 +305,9 @@ export interface FormTemplate {
   fileType: 'docx' | 'html' | 'json' | 'txt' | 'pdf';
   fileName?: string;
   filePath?: string;
-  fileContent?: string; // base64 for docx or raw HTML/markup template
-  fieldMappings: Record<string, string>; // Template Placeholder / tag (e.g. "{{material_code}}") -> System Field Key (e.g. "productCode")
+  fileContent?: string; // base64 for docx, pdf, or raw HTML
+  fieldMappings: Record<string, string>; // Placeholder -> System Field Key
+  pdfCoordinateMappings?: Record<string, PdfCoordinateMapping>; // Key -> coordinate details
   customCss?: string;
   createdAt: string;
   updatedAt: string;
