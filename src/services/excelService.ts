@@ -453,5 +453,55 @@ export const excelService = {
     const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     tauriBridge.saveFileBlob(blob, filename);
+  },
+
+  /**
+   * Parses an Excel buffer for Category lists, extracting distinct Category Names
+   */
+  async parseCategoriesExcel(buffer: ArrayBuffer): Promise<string[]> {
+    const workbook = XLSX.read(buffer, { type: 'array' });
+    const firstSheetName = workbook.SheetNames[0];
+    if (!firstSheetName) {
+      throw new Error('The selected Excel file contains no worksheets.');
+    }
+
+    const sheet = workbook.Sheets[firstSheetName];
+    const rawRows: any[] = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (rawRows.length === 0) {
+      throw new Error('The selected Excel sheet contains no data rows.');
+    }
+
+    const headers = Object.keys(rawRows[0] || {});
+    // Find header key that matches Category Name (ignoring spaces/caps/special characters)
+    const categoryNameHeader = headers.find((h) => {
+      const clean = h.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      return ['categoryname', 'category', 'name', 'categories', 'itemcategory', 'group', 'class', 'classification'].includes(clean);
+    }) || headers.find((h) => h.toLowerCase().includes('category')) || headers[1] || headers[0];
+
+    if (!categoryNameHeader) {
+      throw new Error('Could not identify the category name column in the Excel file.');
+    }
+
+    const categoriesList: string[] = [];
+    rawRows.forEach((row) => {
+      const val = String(row[categoryNameHeader] || '').trim();
+      if (val && val !== 'Category Name') { // Skip header names if they end up as data
+        categoriesList.push(val);
+      }
+    });
+
+    // Return unique categories, preserving casing
+    const uniqueList: string[] = [];
+    const seen = new Set<string>();
+    categoriesList.forEach((cat) => {
+      const lower = cat.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        uniqueList.push(cat);
+      }
+    });
+
+    return uniqueList;
   }
 };

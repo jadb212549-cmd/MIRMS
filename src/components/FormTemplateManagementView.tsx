@@ -195,6 +195,9 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
     loadTemplates();
   }, []);
 
+  const [templateToDelete, setTemplateToDelete] = useState<FormTemplate | null>(null);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+
   // Filter templates
   const filteredTemplates = templates.filter(t => {
     const matchesType = selectedFormType === 'ALL' || t.formType === selectedFormType;
@@ -278,19 +281,15 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
       return;
     }
 
-    if (template.isActive) {
-      const confirmDelete = window.confirm(
-        `"${template.name}" is currently ACTIVE. Deleting it will automatically revert active status to a fallback template. Continue?`
-      );
-      if (!confirmDelete) return;
-    } else {
-      const confirmDelete = window.confirm(`Are you sure you want to delete template "${template.name}"?`);
-      if (!confirmDelete) return;
-    }
+    setTemplateToDelete(template);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!templateToDelete) return;
 
     try {
       const res = await db.deleteFormTemplate(
-        template.id,
+        templateToDelete.id,
         currentUser ? `${currentUser.shortName} (${currentUser.fullName})` : 'Administrator'
       );
 
@@ -301,15 +300,17 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
 
       await loadTemplates();
 
-      if (selectedTemplate?.id === template.id) {
+      if (selectedTemplate?.id === templateToDelete.id) {
         setIsPreviewModalOpen(false);
         setSelectedTemplate(null);
       }
 
-      onNotify?.('Template Deleted', `Template "${template.name}" was successfully removed.`, 'info');
+      onNotify?.('Template Deleted', `Template "${templateToDelete.name}" was successfully removed.`, 'info');
     } catch (err: any) {
       console.error('Failed to delete template:', err);
       onNotify?.('Error', err?.message || 'Failed to delete template', 'warning');
+    } finally {
+      setTemplateToDelete(null);
     }
   };
 
@@ -319,12 +320,10 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
       onNotify?.('Permission Denied', 'Only administrators can reset templates', 'warning');
       return;
     }
+    setIsResetConfirmOpen(true);
+  };
 
-    const confirmReset = window.confirm(
-      'Reset all templates to system defaults? Any custom templates will be preserved, and built-in templates will be restored as active.'
-    );
-    if (!confirmReset) return;
-
+  const handleConfirmResetDefaults = async () => {
     try {
       await db.resetFormTemplates(
         currentUser ? `${currentUser.shortName} (${currentUser.fullName})` : 'Administrator'
@@ -334,6 +333,8 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
     } catch (err) {
       console.error('Failed to reset templates:', err);
       onNotify?.('Error', 'Failed to reset templates', 'warning');
+    } finally {
+      setIsResetConfirmOpen(false);
     }
   };
 
@@ -1497,6 +1498,83 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
                   Close Preview
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM CONFIRMATION MODAL: Delete Template */}
+      {templateToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#1A1A1A] border border-[#333] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in duration-150">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-red-500/10 border border-red-500/20 text-red-500 rounded-xl">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Delete Document Template</h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  Are you sure you want to permanently delete template <strong className="text-gray-200">"{templateToDelete.name}"</strong>? This action cannot be undone.
+                </p>
+                {templateToDelete.isActive && (
+                  <p className="text-xs text-amber-400 font-semibold mt-2 bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg">
+                    ⚠️ This is the currently ACTIVE template. Deleting it will automatically fall back to the built-in standard template.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setTemplateToDelete(null)}
+                className="px-3.5 py-2 bg-[#252525] hover:bg-[#303030] text-gray-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="px-3.5 py-2 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM CONFIRMATION MODAL: Reset Factory Defaults */}
+      {isResetConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#1A1A1A] border border-[#333] rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in duration-150">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-xl">
+                <RotateCcw className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white">Restore Standard Factory Templates?</h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  This will reset all template defaults back to factory standards. Any custom-uploaded templates will be preserved, and standard built-in templates will be reactivated.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsResetConfirmOpen(false)}
+                className="px-3.5 py-2 bg-[#252525] hover:bg-[#303030] text-gray-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResetDefaults}
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Reset to Defaults
+              </button>
             </div>
           </div>
         </div>

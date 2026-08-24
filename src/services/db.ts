@@ -373,6 +373,39 @@ class DatabaseService {
     return { success: true, categories: updated };
   }
 
+  public async bulkImportCategories(names: string[]): Promise<{ success: boolean; importedCount: number; categories: string[] }> {
+    await this.init();
+    const currentCats = Array.isArray(this.config.categories) ? this.config.categories : [...DEFAULT_CATEGORIES];
+    const currentCatsLower = new Set(currentCats.map(c => c.toLowerCase()));
+
+    const added: string[] = [];
+    names.forEach(name => {
+      const clean = name.trim();
+      if (clean && !currentCatsLower.has(clean.toLowerCase())) {
+        currentCatsLower.add(clean.toLowerCase());
+        added.push(clean);
+      }
+    });
+
+    if (added.length === 0) {
+      return { success: true, importedCount: 0, categories: currentCats };
+    }
+
+    const updated = [...currentCats, ...added];
+    this.config = { ...this.config, categories: updated };
+    this.saveLocalConfig();
+
+    await this.logAudit({
+      user: this.config.defaultRegisteredBy || 'Admin',
+      action: 'UPDATE',
+      entityType: 'SETTINGS',
+      details: `Bulk imported ${added.length} categories from Excel spreadsheet.`
+    });
+
+    this.notifyListeners();
+    return { success: true, importedCount: added.length, categories: updated };
+  }
+
   public async deleteCategory(name: string, unlinkReferences = false): Promise<{ success: boolean; categories: string[]; affectedCount?: number }> {
     await this.init();
     const clean = name.trim();

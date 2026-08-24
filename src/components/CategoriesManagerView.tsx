@@ -19,7 +19,8 @@ import {
   Tag,
   Boxes,
   Database,
-  ArrowRight
+  ArrowRight,
+  Upload
 } from 'lucide-react';
 import { db } from '../services/db';
 import { excelService } from '../services/excelService';
@@ -48,6 +49,14 @@ export const CategoriesManagerView: React.FC<CategoriesManagerViewProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // Import Excel state variables
+  const [isImporting, setIsImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<{
+    categories: string[];
+    newCount: number;
+    duplicateCount: number;
+  } | null>(null);
 
   // Deletion modal state for single category
   const [categoryToDelete, setCategoryToDelete] = useState<{
@@ -297,6 +306,82 @@ export const CategoriesManagerView: React.FC<CategoriesManagerViewProps> = ({
     }
   };
 
+  // Handler: Import Categories Excel
+  const handleImportExcel = async () => {
+    setErrorMessage(null);
+    setStatusMessage(null);
+    setIsImporting(true);
+
+    try {
+      const fileRes = await tauriBridge.pickExcelFile();
+      if (!fileRes || !fileRes.fileData) {
+        setIsImporting(false);
+        return;
+      }
+
+      const parsedCats = await excelService.parseCategoriesExcel(fileRes.fileData as ArrayBuffer);
+      if (parsedCats.length === 0) {
+        throw new Error('No valid categories found in the selected Excel file.');
+      }
+
+      const currentCats = await db.getCategories();
+      const currentCatsLower = new Set(currentCats.map(c => c.toLowerCase()));
+
+      let newCount = 0;
+      let duplicateCount = 0;
+
+      parsedCats.forEach(c => {
+        if (currentCatsLower.has(c.toLowerCase())) {
+          duplicateCount++;
+        } else {
+          newCount++;
+        }
+      });
+
+      setImportPreview({
+        categories: parsedCats,
+        newCount,
+        duplicateCount
+      });
+    } catch (err: any) {
+      console.error('Excel category parse error:', err);
+      setErrorMessage(err?.message || 'Failed to parse categories Excel file. Ensure the sheet matches the exported format with a "Category Name" column.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  // Handler: Confirm Excel Category Import
+  const handleConfirmImport = async () => {
+    if (!importPreview) return;
+    setIsImporting(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await db.bulkImportCategories(importPreview.categories);
+      if (res.success) {
+        setCategories(res.categories);
+        setStatusMessage({
+          type: 'success',
+          text: `Successfully imported ${res.importedCount} new category classifications. ${importPreview.duplicateCount} duplicate(s) were skipped.`
+        });
+        if (onNotify) {
+          onNotify(
+            'Import Success',
+            `Successfully imported ${res.importedCount} category classifications.`,
+            'success'
+          );
+        }
+        await onRefreshData();
+        setImportPreview(null);
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Failed to import categories.');
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="bg-[#141414] rounded-2xl border border-[#222] p-6 shadow-xl space-y-6 animate-in fade-in duration-150">
       {/* Header & Main Actions */}
@@ -320,6 +405,17 @@ export const CategoriesManagerView: React.FC<CategoriesManagerViewProps> = ({
 
         {/* Top Header Buttons: Export, Reset, Delete All */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Import from Excel */}
+          <button
+            onClick={handleImportExcel}
+            disabled={isImporting}
+            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer"
+            title="Import categories from an Excel file matching the exported format"
+          >
+            <Upload className="w-4 h-4" />
+            <span>{isImporting ? 'Reading...' : 'Import Categories (.xlsx)'}</span>
+          </button>
+
           {/* Export to Excel */}
           <button
             onClick={handleExportExcel}
@@ -791,6 +887,79 @@ export const CategoriesManagerView: React.FC<CategoriesManagerViewProps> = ({
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>{isResetting ? 'Restoring...' : 'Restore Defaults'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: Excel Categories Import Confirmation Modal */}
+      {importPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-[#1A1A1A] border border-[#333] rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-xl shrink-0">
+                <FileSpreadsheet className="w-6 h-6 text-blue-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-bold text-white">
+                  Confirm Category Taxonomy Import
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  We evaluated your spreadsheet. Below is the parsed structure ready for ingestion.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3 bg-[#111] border border-[#222] rounded-xl text-center">
+                <div className="text-[10px] font-bold text-gray-500 uppercase">Parsed Rows</div>
+                <div className="text-lg font-bold text-white font-mono mt-1">{importPreview.categories.length}</div>
+              </div>
+              <div className="p-3 bg-blue-500/5 border border-blue-500/10 rounded-xl text-center">
+                <div className="text-[10px] font-bold text-blue-400 uppercase">New Categories</div>
+                <div className="text-lg font-bold text-blue-300 font-mono mt-1">{importPreview.newCount}</div>
+              </div>
+              <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl text-center">
+                <div className="text-[10px] font-bold text-amber-400 uppercase">Duplicates (Skip)</div>
+                <div className="text-lg font-bold text-amber-300 font-mono mt-1">{importPreview.duplicateCount}</div>
+              </div>
+            </div>
+
+            {/* List Preview */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-bold text-gray-400">Taxonomy Classifications to Import ({importPreview.categories.length}):</div>
+              <div className="p-3 bg-[#222] rounded-xl border border-[#333] max-h-36 overflow-y-auto">
+                <div className="flex flex-wrap gap-1.5">
+                  {importPreview.categories.map((c) => (
+                    <span
+                      key={c}
+                      className="px-2 py-0.5 bg-[#181818] border border-[#2A2A2A] text-gray-300 text-[11px] rounded font-medium"
+                    >
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setImportPreview(null)}
+                disabled={isImporting}
+                className="px-4 py-2 bg-[#252525] hover:bg-[#303030] text-gray-300 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmImport}
+                disabled={isImporting}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold rounded-xl shadow-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>{isImporting ? 'Importing...' : importPreview.newCount === 0 ? 'No New Categories' : 'Confirm & Ingest'}</span>
               </button>
             </div>
           </div>

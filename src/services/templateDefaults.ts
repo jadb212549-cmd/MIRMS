@@ -1189,7 +1189,7 @@ export function buildSystemDataDictionary(
     todayDateTime: `${dateStr} ${timeStr}`,
     printTimestamp: timeStr,
     photosCount: String((reg.photos || []).length),
-    primaryPhotoUrl: primaryPhoto?.dataUrl || ''
+    primaryPhotoUrl: primaryPhoto?.dataUrl || `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%231E1E1E" rx="8" stroke="%23333333" stroke-width="2"/><rect x="130" y="70" width="140" height="110" fill="none" stroke="%23555555" stroke-width="2" rx="4"/><circle cx="170" cy="110" r="15" fill="none" stroke="%23555555" stroke-width="2"/><path d="M135 175 L180 135 L215 165 L245 140 L265 175" fill="none" stroke="%23555555" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><text x="200" y="215" font-family="sans-serif" font-size="12" fill="%23888888" text-anchor="middle" font-weight="bold">NO SPECIMEN PHOTO UPLOADED</text><text x="200" y="235" font-family="sans-serif" font-size="10" fill="%23555555" text-anchor="middle">Standard Quality Reference Sample</text></svg>`
   };
 
   // Map custom dynamic fields

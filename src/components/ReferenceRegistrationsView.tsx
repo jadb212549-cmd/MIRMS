@@ -391,13 +391,15 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                         >
                           <History className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => setProofRegistration(reg)}
-                          title="Print Inspection Proof"
-                          className="p-1.5 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                        </button>
+                        {currentUser && (
+                          <button
+                            onClick={() => setProofRegistration(reg)}
+                            title="Print Inspection Proof"
+                            className="p-1.5 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             if (master) {
@@ -555,13 +557,15 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                               >
                                 <History className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                onClick={() => setProofRegistration(reg)}
-                                title="Print Inspection Proof"
-                                className="p-1 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                              </button>
+                              {currentUser && (
+                                <button
+                                  onClick={() => setProofRegistration(reg)}
+                                  title="Print Inspection Proof"
+                                  className="p-1 text-gray-400 hover:text-emerald-400 bg-[#1A1A1A] hover:bg-[#252525] rounded border border-[#333] transition-colors"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => {
                                   if (master) {

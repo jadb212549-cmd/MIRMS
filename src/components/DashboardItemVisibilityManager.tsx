@@ -256,6 +256,44 @@ export const DashboardItemVisibilityManager: React.FC<DashboardItemVisibilityMan
         </div>
       </div>
 
+      {/* Dashboard Section / Component Visibility Control */}
+      <div className="bg-[#141414] rounded-2xl border border-[#222] p-5 shadow-lg space-y-3.5">
+        <h4 className="text-xs font-mono font-bold text-gray-400 uppercase tracking-wider">Dashboard Element Visibility</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="flex items-start gap-3 p-4 bg-[#1A1A1A] hover:bg-[#1E1E1E] rounded-xl border border-[#252525] hover:border-[#333] transition-all cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={config.hidePerformanceTable ?? false}
+              onChange={async (e) => {
+                try {
+                  await onConfigChange({ hidePerformanceTable: e.target.checked });
+                  if (onNotify) {
+                    onNotify(
+                      'Dashboard Visibility',
+                      e.target.checked
+                        ? 'Individual Performance Table is now hidden from the dashboard'
+                        : 'Individual Performance Table is now visible on the dashboard',
+                      'success'
+                    );
+                  }
+                } catch (err: any) {
+                  if (onNotify) {
+                    onNotify('Error', `Failed to update configuration: ${err?.message || err}`, 'error');
+                  }
+                }
+              }}
+              className="rounded bg-[#222] border-[#444] text-amber-500 focus:ring-amber-500 focus:ring-offset-0 w-4.5 h-4.5 mt-0.5 cursor-pointer"
+            />
+            <div>
+              <span className="text-xs font-bold text-gray-200 block">Hide Individual Performance Table</span>
+              <span className="text-[10px] text-gray-500 block mt-1 leading-relaxed">
+                Hides the team members' performance metrics and registration targets from displaying on the main dashboard view.
+              </span>
+            </div>
+          </label>
+        </div>
+      </div>
+
       {/* Status Feedback Message */}
       {statusMessage && (
         <div

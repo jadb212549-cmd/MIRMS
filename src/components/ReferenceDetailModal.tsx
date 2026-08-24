@@ -537,14 +537,16 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
                 )
               ) : (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => setShowInspectionProof(true)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors cursor-pointer"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>Print Inspection Proof</span>
-                  </button>
+                  {currentUser && (
+                    <button
+                      type="button"
+                      onClick={() => setShowInspectionProof(true)}
+                      className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-sm transition-colors cursor-pointer"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Print Inspection Proof</span>
+                    </button>
+                  )}
 
                   <button
                     onClick={handleGenerateWordForm}
