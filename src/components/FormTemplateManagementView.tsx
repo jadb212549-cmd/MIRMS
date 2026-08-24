@@ -163,6 +163,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
   const [importVersion, setImportVersion] = useState('1.0');
   const [importFileType, setImportFileType] = useState<'docx' | 'html' | 'txt' | 'json' | 'pdf'>('html');
   const [importFileName, setImportFileName] = useState('');
+  const [importFilePath, setImportFilePath] = useState('');
   const [importFileContent, setImportFileContent] = useState('');
   const [importCustomCss, setImportCustomCss] = useState('');
   const [importMappings, setImportMappings] = useState<Record<string, string>>({});
@@ -343,9 +344,11 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
 
     setIsUploading(true);
     const fileName = file.name;
+    const filePath = (file as any).path || '';
     const extension = fileName.split('.').pop()?.toLowerCase() || '';
 
     setImportFileName(fileName);
+    if (filePath) setImportFilePath(filePath);
     if (!importName) {
       setImportName(fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '));
     }
@@ -465,6 +468,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
         isActive: setAsActiveOnSave,
         fileType: importFileType,
         fileName: importFileName,
+        filePath: importFilePath || undefined,
         fileContent: importFileContent,
         customCss: importCustomCss,
         fieldMappings: importMappings,

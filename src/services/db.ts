@@ -1,7 +1,7 @@
 import { MasterItem, ReferenceRegistration, AuditLogEntry, AppConfig, CustomFieldDefinition, SyncMessage, FormTemplate, FormType, ReferenceRevisionRecord, RevisionStatus } from '../types';
 import { INITIAL_MASTER_ITEMS, INITIAL_REGISTRATIONS, INITIAL_AUDIT_LOGS, DEFAULT_CONFIG, DEFAULT_CUSTOM_FIELDS, DEFAULT_CATEGORIES } from './defaultData';
 import { INITIAL_FORM_TEMPLATES } from './templateDefaults';
-import { isTauri } from './tauriService';
+import { isTauri, tauriBridge } from './tauriService';
 import { realtimeSync } from './realtimeSync';
 import JSZip from 'jszip';
 
@@ -1744,6 +1744,13 @@ class DatabaseService {
 
     const wasActive = target.isActive;
     const formType = target.formType;
+
+    // Delete template file from disk in Tauri environment if path/name exists
+    try {
+      await tauriBridge.deleteTemplateFile(target.filePath, target.fileName);
+    } catch (fsErr) {
+      console.warn('Failed to remove template file from disk:', fsErr);
+    }
 
     this.formTemplates.splice(targetIndex, 1);
 

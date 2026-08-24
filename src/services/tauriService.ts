@@ -211,5 +211,53 @@ export const tauriBridge = {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }, 100);
+  },
+
+  /**
+   * Delete a file from disk using Tauri fs plugin or native bridge commands.
+   */
+  async removeFile(filePath?: string): Promise<boolean> {
+    if (!filePath) return false;
+
+    if (isTauri()) {
+      try {
+        const { remove } = await import('@tauri-apps/plugin-fs');
+        await remove(filePath);
+        return true;
+      } catch (pluginErr) {
+        console.warn('Tauri plugin-fs remove failed, trying invoke fallback:', pluginErr);
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('remove_file', { path: filePath });
+          return true;
+        } catch (invokeErr) {
+          console.warn('Tauri invoke remove_file fallback error:', invokeErr);
+        }
+      }
+    }
+    return false;
+  },
+
+  /**
+   * Delete document template from Tauri app data templates directory or specific path.
+   */
+  async deleteTemplateFile(filePath?: string, fileName?: string): Promise<boolean> {
+    let deleted = false;
+    if (filePath) {
+      deleted = await this.removeFile(filePath);
+    }
+
+    if (fileName && isTauri()) {
+      try {
+        const dataDir = await this.getDataDirectory();
+        const templatePath = `${dataDir.replace(/\\/g, '/')}/templates/${fileName}`;
+        const res = await this.removeFile(templatePath);
+        if (res) deleted = true;
+      } catch (err) {
+        console.warn('Tauri deleteTemplateFile dataDir fallback error:', err);
+      }
+    }
+
+    return deleted;
   }
 };

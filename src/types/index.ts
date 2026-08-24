@@ -293,6 +293,7 @@ export interface FormTemplate {
   isActive: boolean;
   fileType: 'docx' | 'html' | 'json' | 'txt' | 'pdf';
   fileName?: string;
+  filePath?: string;
   fileContent?: string; // base64 for docx or raw HTML/markup template
   fieldMappings: Record<string, string>; // Template Placeholder / tag (e.g. "{{material_code}}") -> System Field Key (e.g. "productCode")
   customCss?: string;
