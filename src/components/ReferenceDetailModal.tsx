@@ -118,16 +118,18 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => onEdit(registration)}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-[#222] rounded-md transition-colors"
-              title={registration.status === 'PENDING_APPROVAL' ? 'Edit Pending Reference' : 'Edit Reference (Submit Revision)'}
-            >
-              <Edit3 className="w-4 h-4" />
-            </button>
+            {currentUser && (
+              <button
+                onClick={() => onEdit(registration)}
+                className="p-1.5 text-gray-400 hover:text-white hover:bg-[#222] rounded-md transition-colors cursor-pointer"
+                title={registration.status === 'PENDING_APPROVAL' ? 'Edit Pending Reference' : 'Edit Reference (Submit Revision)'}
+              >
+                <Edit3 className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-[#222] rounded-md transition-colors"
+              className="p-1.5 text-gray-400 hover:text-white hover:bg-[#222] rounded-md transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -523,14 +525,16 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
           <div className="pt-4 border-t border-[#222] flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2">
               {registration.status === 'PENDING_APPROVAL' ? (
-                <button
-                  type="button"
-                  onClick={() => onEdit(registration)}
-                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition-colors cursor-pointer"
-                >
-                  <Edit3 className="w-4 h-4" />
-                  <span>Edit Pending Registration</span>
-                </button>
+                currentUser && (
+                  <button
+                    type="button"
+                    onClick={() => onEdit(registration)}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-amber-950 bg-amber-400 hover:bg-amber-300 rounded-lg shadow-sm transition-colors cursor-pointer"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    <span>Edit Pending Registration</span>
+                  </button>
+                )
               ) : (
                 <>
                   <button

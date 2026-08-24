@@ -42,7 +42,8 @@ import {
   Clock,
   Sparkles,
   LayoutTemplate,
-  Printer
+  Printer,
+  EyeOff
 } from 'lucide-react';
 import { realtimeSync } from '../services/realtimeSync';
 import { tauriBridge } from '../services/tauriService';
@@ -57,6 +58,7 @@ import { FormTemplateManagementView } from './FormTemplateManagementView';
 import { AuditTrailView } from './AuditTrailView';
 import { RevisionApprovalQueueView } from './RevisionApprovalQueueView';
 import { CategoriesManagerView } from './CategoriesManagerView';
+import { DashboardItemVisibilityManager } from './DashboardItemVisibilityManager';
 
 interface AdminDashboardViewProps {
   config: AppConfig;
@@ -81,10 +83,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
 }) => {
   // Active sub-section within the Admin Dashboard
   const [activeAdminSubTab, setActiveAdminSubTab] = useState<
-    'OVERVIEW' | 'APPROVAL_QUEUE' | 'CATEGORIES' | 'FORM_TEMPLATES' | 'SHARED_SYNC' | 'EXCEL' | 'WORD_TEMPLATES' | 'CUSTOM_FIELDS' | 'AUDIT' | 'BACKUP' | 'SETTINGS' | 'USER_ACCESS'
+    'OVERVIEW' | 'APPROVAL_QUEUE' | 'DASHBOARD_VISIBILITY' | 'CATEGORIES' | 'FORM_TEMPLATES' | 'SHARED_SYNC' | 'EXCEL' | 'WORD_TEMPLATES' | 'CUSTOM_FIELDS' | 'AUDIT' | 'BACKUP' | 'SETTINGS' | 'USER_ACCESS'
   >(
     initialSubTab === 'APPROVAL_QUEUE'
       ? 'APPROVAL_QUEUE'
+      : initialSubTab === 'DASHBOARD_VISIBILITY' || initialSubTab === 'HIDE_ITEMS'
+      ? 'DASHBOARD_VISIBILITY'
       : initialSubTab === 'CATEGORIES'
       ? 'CATEGORIES'
       : initialSubTab === 'FORM_TEMPLATES'
@@ -520,6 +524,27 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </button>
 
         <button
+          onClick={() => setActiveAdminSubTab('DASHBOARD_VISIBILITY')}
+          className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
+            activeAdminSubTab === 'DASHBOARD_VISIBILITY'
+              ? 'bg-amber-600 text-white shadow-sm'
+              : 'bg-[#141414] text-gray-400 hover:text-white hover:bg-[#1C1C1C] border border-[#222]'
+          }`}
+        >
+          <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+          <span>Hide Items on Dashboard</span>
+          {(config.hiddenDashboardProductCodes?.length ?? 0) > 0 ? (
+            <span className="px-1.5 py-0.2 rounded-full font-mono bg-amber-500 text-black text-[10px] font-bold">
+              {config.hiddenDashboardProductCodes?.length} Hidden
+            </span>
+          ) : (
+            <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-emerald-500/20 text-emerald-400 font-semibold">
+              All Visible
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveAdminSubTab('CATEGORIES')}
           className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap ${
             activeAdminSubTab === 'CATEGORIES'
@@ -681,6 +706,39 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
               <div className="mt-5 pt-3 border-t border-[#222] flex items-center justify-between text-xs text-amber-400 font-semibold">
                 <span>Open Approval Queue</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+
+            {/* Module 0.2: Hide Items on Dashboard */}
+            <div
+              onClick={() => setActiveAdminSubTab('DASHBOARD_VISIBILITY')}
+              className="bg-[#141414] hover:bg-[#191919] border border-[#222] hover:border-amber-500/40 rounded-2xl p-5 shadow-lg transition-all cursor-pointer group flex flex-col justify-between"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-xl group-hover:scale-105 transition-transform">
+                    <EyeOff className="w-6 h-6" />
+                  </div>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
+                    (config.hiddenDashboardProductCodes?.length ?? 0) > 0
+                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                      : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  }`}>
+                    {(config.hiddenDashboardProductCodes?.length ?? 0) > 0
+                      ? `${config.hiddenDashboardProductCodes?.length} Hidden`
+                      : 'All Visible'}
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white group-hover:text-amber-300 transition-colors">
+                  Hide Items on Dashboard
+                </h3>
+                <p className="text-xs text-gray-400 mt-1.5 leading-relaxed">
+                  Tick or uncheck items with batch operations to hide/show specific materials from Main Dashboard KPI metrics, percentages, and activity feeds.
+                </p>
+              </div>
+              <div className="mt-5 pt-3 border-t border-[#222] flex items-center justify-between text-xs text-amber-400 font-semibold">
+                <span>Manage Visibility</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
@@ -955,6 +1013,24 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
             masterItems={masterItems}
             config={config}
             onRefreshData={onRefreshData}
+          />
+        </div>
+      )}
+
+      {/* SUB-SECTION: HIDE ITEMS ON DASHBOARD VISIBILITY */}
+      {activeAdminSubTab === 'DASHBOARD_VISIBILITY' && (
+        <div className="space-y-6 animate-in fade-in duration-150">
+          <DashboardItemVisibilityManager
+            config={config}
+            masterItems={masterItems}
+            registrations={registrations}
+            onConfigChange={onConfigChange}
+            onNotify={(title, text, type) =>
+              setStatusMessage({
+                type: type === 'error' ? 'error' : type === 'success' ? 'success' : 'info',
+                text: `${title}: ${text}`
+              })
+            }
           />
         </div>
       )}

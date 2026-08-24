@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { renderAsync } from 'docx-preview';
 import { AppConfig, MasterItem, ReferenceRegistration, WordDocPlaceholder } from '../types';
 import { wordService } from '../services/wordService';
+import { pdfService } from '../services/pdfService';
 import {
   FileText,
   Download,
@@ -561,6 +562,98 @@ export const WordTemplateDocPreview: React.FC<WordTemplateDocPreviewProps> = ({
           >
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{isGenerating ? 'Generating...' : 'Export DOCX'}</span>
+          </button>
+
+          {/* Export PDF */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!registration || !masterItem) return;
+              const specHtml = `
+                <div style="font-family: Arial, sans-serif; padding: 24px; max-width: 800px; margin: 0 auto; color: #0f172a;">
+                  <div style="border-bottom: 2px solid #0284c7; padding-bottom: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                      <h1 style="font-size: 20px; font-weight: bold; margin: 0; color: #0f172a;">${config.companyName || 'Precision Industrial Manufacturing Corp.'}</h1>
+                      <p style="font-size: 12px; color: #0284c7; margin: 4px 0 0 0; font-weight: bold; tracking-wide;">MATERIAL REFERENCE & SAMPLE SPECIFICATION FORM</p>
+                    </div>
+                    <div style="text-align: right; font-size: 11px; color: #475569; font-family: monospace;">
+                      <div><strong>Code:</strong> ${registration.productCode}</div>
+                      <div><strong>Rev:</strong> ${registration.revision || 'Rev 01'}</div>
+                      <div><strong>Date:</strong> ${registration.registrationDate || new Date().toISOString().split('T')[0]}</div>
+                    </div>
+                  </div>
+
+                  <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px;">
+                    <tbody>
+                      <tr style="background-color: #f8fafc;">
+                        <th style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; width: 35%; color: #334155;">Product Code</th>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px 12px; font-weight: bold; font-family: monospace;">${registration.productCode}</td>
+                      </tr>
+                      <tr>
+                        <th style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; color: #334155;">Description</th>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px 12px;">${masterItem.description || 'N/A'}</td>
+                      </tr>
+                      <tr style="background-color: #f8fafc;">
+                        <th style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; color: #334155;">Material Type</th>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px 12px;">${(registration.materialType || masterItem.materialType) === 'PS' ? 'Production Supply (PS)' : 'Raw Material (RM)'}</td>
+                      </tr>
+                      <tr>
+                        <th style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; color: #334155;">Category</th>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px 12px;">${registration.category || masterItem.category || 'Standard'}</td>
+                      </tr>
+                      <tr style="background-color: #f8fafc;">
+                        <th style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; color: #334155;">Supplier</th>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px 12px;">${registration.supplier || 'N/A'}</td>
+                      </tr>
+                      <tr>
+                        <th style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; color: #334155;">Specification Details</th>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px 12px;">${registration.specification || 'N/A'}</td>
+                      </tr>
+                      <tr style="background-color: #f8fafc;">
+                        <th style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; color: #334155;">Inspected By</th>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px 12px;">${registration.registeredBy || 'Inspector'}</td>
+                      </tr>
+                      <tr>
+                        <th style="border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; color: #334155;">Remarks / Notes</th>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px 12px;">${registration.remarks || 'None'}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  ${registration.photos && registration.photos.length > 0 ? `
+                    <div style="margin-top: 20px;">
+                      <h3 style="font-size: 13px; font-weight: bold; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; color: #0f172a; margin-bottom: 10px;">Specimen Photos (${registration.photos.length})</h3>
+                      <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                        ${registration.photos.map(p => `
+                          <div style="border: 1px solid #cbd5e1; padding: 6px; border-radius: 6px; text-align: center; background: #fafafa;">
+                            <img src="${p.dataUrl}" style="max-width: 200px; max-height: 150px; object-fit: contain; display: block; border-radius: 4px;" />
+                            <span style="font-size: 10px; color: #64748b; margin-top: 4px; display: block;">${p.caption || p.fileName}</span>
+                          </div>
+                        `).join('')}
+                      </div>
+                    </div>
+                  ` : ''}
+
+                  <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; padding-top: 20px; display: flex; justify-content: space-between; font-size: 11px; color: #475569;">
+                    <div>
+                      <p style="margin: 0; font-weight: bold;">Inspector Signature:</p>
+                      <p style="margin-top: 24px;">___________________________</p>
+                    </div>
+                    <div>
+                      <p style="margin: 0; font-weight: bold;">QA Approval Signature:</p>
+                      <p style="margin-top: 24px;">___________________________</p>
+                    </div>
+                  </div>
+                </div>
+              `;
+              pdfService.exportHtmlToPdf(specHtml, `Material_Reference_${registration.productCode}`);
+            }}
+            disabled={!registration}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-lg shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
+            title="Export specification document as PDF"
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Export PDF</span>
           </button>
         </div>
       </div>

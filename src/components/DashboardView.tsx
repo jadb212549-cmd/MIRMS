@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { MasterItem, ReferenceRegistration, AuditLogEntry, AppConfig } from '../types';
-import { ShieldCheck, Clock, Image, Database, Sparkles, User, Award, Users, ArrowRight } from 'lucide-react';
+import { ShieldCheck, Clock, Image, Database, Sparkles, User, Award, Users, ArrowRight, EyeOff } from 'lucide-react';
 
 interface DashboardViewProps {
   masterItems: MasterItem[];
@@ -17,14 +17,31 @@ interface DashboardViewProps {
 export const DashboardView: React.FC<DashboardViewProps> = ({
   masterItems,
   registrations,
+  config,
   onNavigateTab,
   onOpenDetailModal
 }) => {
-  const totalMaster = masterItems.length;
-  const rmItems = masterItems.filter((i) => i.category === 'RM').length;
-  const psItems = masterItems.filter((i) => i.category === 'PS').length;
+  // Hidden product codes from Admin policy
+  const hiddenCodesSet = useMemo(() => {
+    return new Set((config?.hiddenDashboardProductCodes || []).map((c) => c.toLowerCase()));
+  }, [config?.hiddenDashboardProductCodes]);
 
-  const registeredCount = registrations.length;
+  const hiddenCount = (config?.hiddenDashboardProductCodes || []).length;
+
+  // Filter master items & registrations that are not hidden from dashboard
+  const visibleMasterItems = useMemo(() => {
+    return masterItems.filter((i) => !hiddenCodesSet.has(i.productCode.toLowerCase()));
+  }, [masterItems, hiddenCodesSet]);
+
+  const visibleRegistrations = useMemo(() => {
+    return registrations.filter((r) => !hiddenCodesSet.has(r.productCode.toLowerCase()));
+  }, [registrations, hiddenCodesSet]);
+
+  const totalMaster = visibleMasterItems.length;
+  const rmItems = visibleMasterItems.filter((i) => i.category === 'RM' || i.materialType === 'RM').length;
+  const psItems = visibleMasterItems.filter((i) => i.category === 'PS' || i.materialType === 'PS').length;
+
+  const registeredCount = visibleRegistrations.length;
   const unregisteredCount = Math.max(0, totalMaster - registeredCount);
   const registrationPct = totalMaster > 0 ? Math.round((registeredCount / totalMaster) * 100) : 0;
 
@@ -57,23 +74,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Filtered registrations for Today and Yesterday
   const registeredTodayList = useMemo(() => {
-    return registrations.filter((r) => getRegDateOnly(r) === todayStr);
-  }, [registrations, todayStr]);
+    return visibleRegistrations.filter((r) => getRegDateOnly(r) === todayStr);
+  }, [visibleRegistrations, todayStr]);
 
   const registeredYesterdayList = useMemo(() => {
-    return registrations.filter((r) => getRegDateOnly(r) === yesterdayStr);
-  }, [registrations, yesterdayStr]);
+    return visibleRegistrations.filter((r) => getRegDateOnly(r) === yesterdayStr);
+  }, [visibleRegistrations, yesterdayStr]);
 
   // Breakdown for Today & Yesterday
   const todayRM = registeredTodayList.filter((r) => {
-    const m = masterItems.find((item) => item.productCode.toLowerCase() === r.productCode.toLowerCase());
-    return m?.category === 'RM';
+    const m = visibleMasterItems.find((item) => item.productCode.toLowerCase() === r.productCode.toLowerCase());
+    return m?.category === 'RM' || m?.materialType === 'RM';
   }).length;
   const todayPS = registeredTodayList.length - todayRM;
 
   const yesterdayRM = registeredYesterdayList.filter((r) => {
-    const m = masterItems.find((item) => item.productCode.toLowerCase() === r.productCode.toLowerCase());
-    return m?.category === 'RM';
+    const m = visibleMasterItems.find((item) => item.productCode.toLowerCase() === r.productCode.toLowerCase());
+    return m?.category === 'RM' || m?.materialType === 'RM';
   }).length;
   const yesterdayPS = registeredYesterdayList.length - yesterdayRM;
 
@@ -91,13 +108,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       }
     >();
 
-    registrations.forEach((reg) => {
+    visibleRegistrations.forEach((reg) => {
       const op = reg.registeredBy?.trim() || 'Default Inspector';
       const dateStr = getRegDateOnly(reg);
       const isToday = dateStr === todayStr;
       const isYesterday = dateStr === yesterdayStr;
-      const master = masterItems.find((m) => m.productCode.toLowerCase() === reg.productCode.toLowerCase());
-      const isRM = master?.category === 'RM';
+      const master = visibleMasterItems.find((m) => m.productCode.toLowerCase() === reg.productCode.toLowerCase());
+      const isRM = master?.category === 'RM' || master?.materialType === 'RM';
 
       let regDate = new Date();
       if (reg.registrationDate) {
@@ -144,15 +161,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         };
       })
       .sort((a, b) => b.total - a.total);
-  }, [registrations, masterItems, todayStr, yesterdayStr]);
+  }, [visibleRegistrations, visibleMasterItems, todayStr, yesterdayStr]);
 
   // Latest registrations list (max 5 items)
   const latestRegistrationsList = useMemo(() => {
-    return registrations.slice(0, 5);
-  }, [registrations]);
+    return visibleRegistrations.slice(0, 5);
+  }, [visibleRegistrations]);
 
   return (
     <div className="space-y-6 select-none">
+      {/* Hidden Items Notice Banner */}
+      {hiddenCount > 0 && (
+        <div className="bg-[#16140E] border border-amber-500/25 px-4 py-2.5 rounded-xl flex items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2 text-amber-300">
+            <EyeOff className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              <strong className="font-semibold">{hiddenCount}</strong> catalog {hiddenCount === 1 ? 'item is' : 'items are'} currently hidden from the Main Dashboard according to Admin policy.
+            </span>
+          </div>
+          <button
+            onClick={() => onNavigateTab('ADMIN')}
+            className="text-[11px] font-semibold text-amber-400 hover:text-amber-300 underline font-mono shrink-0 cursor-pointer"
+          >
+            Manage in Admin Center →
+          </button>
+        </div>
+      )}
+
       {/* Individual Performance Table */}
       <div className="bg-[#121212] rounded-xl border border-[#222] overflow-hidden flex flex-col">
         <div className="p-4 border-b border-[#222] bg-[#1A1A1A] flex flex-col sm:flex-row sm:items-center justify-between gap-2">

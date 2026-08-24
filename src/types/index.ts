@@ -242,6 +242,7 @@ export interface AppConfig {
   adminCanAutoApproveOwnRevisions?: boolean;
   requireApprovalForRevisions?: boolean;
   requireAdminApprovalForNewRegistrations?: boolean;
+  hiddenDashboardProductCodes?: string[];
 }
 
 export interface DailyAutoBackupRecord {
@@ -290,7 +291,7 @@ export interface FormTemplate {
   formType: FormType;
   version: string;
   isActive: boolean;
-  fileType: 'docx' | 'html' | 'json' | 'txt';
+  fileType: 'docx' | 'html' | 'json' | 'txt' | 'pdf';
   fileName?: string;
   fileContent?: string; // base64 for docx or raw HTML/markup template
   fieldMappings: Record<string, string>; // Template Placeholder / tag (e.g. "{{material_code}}") -> System Field Key (e.g. "productCode")

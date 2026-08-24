@@ -21,6 +21,9 @@ import {
   userService
 } from '../services/userService';
 import {
+  pdfService
+} from '../services/pdfService';
+import {
   LayoutTemplate,
   Plus,
   Upload,
@@ -157,7 +160,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
   const [importName, setImportName] = useState('');
   const [importDescription, setImportDescription] = useState('');
   const [importVersion, setImportVersion] = useState('1.0');
-  const [importFileType, setImportFileType] = useState<'docx' | 'html' | 'txt' | 'json'>('html');
+  const [importFileType, setImportFileType] = useState<'docx' | 'html' | 'txt' | 'json' | 'pdf'>('html');
   const [importFileName, setImportFileName] = useState('');
   const [importFileContent, setImportFileContent] = useState('');
   const [importCustomCss, setImportCustomCss] = useState('');
@@ -350,6 +353,29 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
         setImportMappings(autoMappings);
       };
       reader.readAsDataURL(file);
+    } else if (extension === 'pdf') {
+      setImportFileType('pdf');
+      setImportFormType('material_reference_sheet');
+      reader.onload = (event) => {
+        const base64 = (event.target?.result as string).split(',')[1] || '';
+        setImportFileContent(base64);
+        setIsUploading(false);
+        const autoMappings: Record<string, string> = {
+          '{{productCode}}': 'productCode',
+          '{{materialType}}': 'materialType',
+          '{{category}}': 'category',
+          '{{description}}': 'description',
+          '{{supplier}}': 'supplier',
+          '{{unit}}': 'unit',
+          '{{registrationDate}}': 'registrationDate',
+          '{{registeredBy}}': 'registeredBy',
+          '{{revision}}': 'revision',
+          '{{specification}}': 'specification',
+          '{{remarks}}': 'remarks'
+        };
+        setImportMappings(autoMappings);
+      };
+      reader.readAsDataURL(file);
     } else {
       // HTML or TXT
       if (extension === 'txt') {
@@ -520,6 +546,11 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
     try {
       let mimeType = 'text/html';
       let extension = template.fileType || 'html';
+
+      if (template.fileType === 'pdf') {
+        pdfService.downloadPdfFromBase64(template.fileContent, template.fileName || `${template.name.replace(/\s+/g, '_')}.pdf`);
+        return;
+      }
 
       if (template.fileType === 'docx') {
         const byteCharacters = atob(template.fileContent);
@@ -781,7 +812,13 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
                       >
                         {isRef ? 'Reference Sheet' : 'Proof Slip'}
                       </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-[#222] text-gray-400 border border-[#333] uppercase">
+                      <span
+                        className={`text-[10px] font-mono px-1.5 py-0.2 rounded uppercase border ${
+                          template.fileType === 'pdf'
+                            ? 'bg-red-500/10 text-red-400 border-red-500/30 font-bold'
+                            : 'bg-[#222] text-gray-400 border-[#333]'
+                        }`}
+                      >
                         {template.fileType}
                       </span>
                     </div>
@@ -840,9 +877,27 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
 
                   <div className="flex items-center gap-1">
                     <button
+                      onClick={() => {
+                        try {
+                          pdfService.exportTemplateAsPdf(
+                            template,
+                            sampleDict,
+                            `${template.name}_${sampleReg?.productCode || 'Sample'}`
+                          );
+                        } catch (err: any) {
+                          onNotify?.('PDF Export', err.message || 'Failed to export PDF', 'warning');
+                        }
+                      }}
+                      className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                      title="Export Form Sample as PDF"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-red-400" />
+                    </button>
+
+                    <button
                       onClick={() => handleDownloadTemplate(template)}
                       className="p-1.5 text-gray-400 hover:text-white hover:bg-[#252525] rounded-lg transition-colors"
-                      title="Download / Export Template"
+                      title="Download Original Template File"
                     >
                       <Download className="w-3.5 h-3.5" />
                     </button>
@@ -1011,7 +1066,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".docx,.html,.htm,.txt"
+                    accept=".docx,.html,.htm,.txt,.pdf"
                     onChange={handleFileSelect}
                     className="hidden"
                   />
@@ -1021,8 +1076,8 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
                   </p>
                   <p className="text-[11px] text-gray-500 mt-1">
                     {importFormType === 'material_reference_sheet'
-                      ? 'Supported formats: Word Document (.docx), HTML (.html)'
-                      : 'Supported formats: HTML (.html), Receipt Text (.txt)'}
+                      ? 'Supported formats: Word (.docx), HTML (.html), PDF (.pdf)'
+                      : 'Supported formats: HTML (.html), PDF (.pdf), Receipt Text (.txt)'}
                   </p>
                 </div>
               </div>
@@ -1344,7 +1399,13 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
 
             {/* Body Preview */}
             <div className="p-6 overflow-y-auto flex-1 bg-[#1A1A1A] flex justify-center">
-              {selectedTemplate.fileType === 'docx' ? (
+              {selectedTemplate.fileType === 'pdf' && selectedTemplate.fileContent ? (
+                <iframe
+                  src={`data:application/pdf;base64,${selectedTemplate.fileContent}`}
+                  className="w-full h-[600px] rounded-lg border border-[#333]"
+                  title={selectedTemplate.name}
+                />
+              ) : selectedTemplate.fileType === 'docx' ? (
                 <DocxModalPreview template={selectedTemplate} config={config} sampleDict={sampleDict} />
               ) : previewHtml ? (
                 <div
@@ -1362,6 +1423,24 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
                 Format: {selectedTemplate.fileType.toUpperCase()} • Status: {selectedTemplate.isActive ? 'Active' : 'Inactive'}
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      pdfService.exportTemplateAsPdf(
+                        selectedTemplate,
+                        sampleDict,
+                        `${selectedTemplate.name}_${sampleReg?.productCode || 'Sample'}`
+                      );
+                    } catch (err: any) {
+                      onNotify?.('PDF Export', err.message || 'Failed to export PDF', 'warning');
+                    }
+                  }}
+                  className="px-3.5 py-1.5 text-xs font-semibold bg-red-600 hover:bg-red-500 text-white rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Export PDF</span>
+                </button>
                 {!selectedTemplate.isActive && isAdmin && (
                   <button
                     onClick={() => {

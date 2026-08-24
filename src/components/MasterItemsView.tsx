@@ -267,13 +267,15 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
               <span className="hidden sm:inline">Export</span>
             </button>
 
-            <button
-              onClick={onOpenCreateModal}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors shrink-0"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Master Item</span>
-            </button>
+            {currentUser && (
+              <button
+                onClick={onOpenCreateModal}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Master Item</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -506,7 +508,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-[#0A0A0A] border-b border-[#222] text-gray-500 font-mono uppercase tracking-wider text-[10px]">
-                <th className="py-3 px-3 w-20 text-center font-medium">Actions</th>
+                {currentUser && <th className="py-3 px-3 w-20 text-center font-medium">Actions</th>}
                 <th className="py-3 px-3 w-28 text-center font-medium">Reference</th>
                 <th className="py-3 px-4 w-36 font-medium">Product Code</th>
                 <th className="py-3 px-4 font-medium">Material / Item Description</th>
@@ -521,14 +523,14 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
             <tbody className="divide-y divide-[#222]">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-gray-500">
+                  <td colSpan={currentUser ? 10 : 9} className="py-12 text-center text-gray-500">
                     <Database className="w-8 h-8 mx-auto text-gray-600 mb-2" />
                     <p className="font-semibold text-gray-300">No master reference items matched your filter criteria.</p>
                     <p className="text-xs text-gray-500 mt-1">Try clearing search, date, or category filters.</p>
                     {hasActiveFilters && (
                       <button
                         onClick={resetAllFilters}
-                        className="mt-3 px-3 py-1.5 text-xs font-semibold bg-[#222] hover:bg-[#2A2A2A] text-blue-400 rounded border border-[#333] transition-colors"
+                        className="mt-3 px-3 py-1.5 text-xs font-semibold bg-[#222] hover:bg-[#2A2A2A] text-blue-400 rounded border border-[#333] transition-colors cursor-pointer"
                       >
                         Reset All Filters
                       </button>
@@ -544,45 +546,51 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
 
                   return (
                     <tr key={item.id} className="hover:bg-[#1A1A1A] transition-colors group">
-                      {/* 1. Actions (Edit & Delete) */}
-                      <td className="py-3 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <button
-                            onClick={() => onOpenEditModal(item)}
-                            title="Edit Master Item"
-                            className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-[#252525] rounded transition-colors cursor-pointer"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          {isAdmin && (
+                      {/* 1. Actions (Edit & Delete) - Only if logged in */}
+                      {currentUser && (
+                        <td className="py-3 px-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
                             <button
-                              onClick={() => setItemToDelete(item)}
-                              title="Delete Master Item"
-                              className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
+                              onClick={() => onOpenEditModal(item)}
+                              title="Edit Master Item"
+                              className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-[#252525] rounded transition-colors cursor-pointer"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Edit3 className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                        </div>
-                      </td>
+                            {isAdmin && (
+                              <button
+                                onClick={() => setItemToDelete(item)}
+                                title="Delete Master Item"
+                                className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      )}
 
                       {/* 2. View / Register Reference */}
                       <td className="py-3 px-3 text-center">
                         {isRegistered ? (
                           <button
                             onClick={() => onViewReference(reg!)}
-                            className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-blue-400 hover:bg-[#2A2A2A] hover:text-blue-300 rounded border border-[#333] transition-colors"
+                            className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-blue-400 hover:bg-[#2A2A2A] hover:text-blue-300 rounded border border-[#333] transition-colors cursor-pointer"
                           >
                             View
                           </button>
-                        ) : (
+                        ) : currentUser ? (
                           <button
                             onClick={() => onRegisterReference(item)}
-                            className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-green-400 hover:bg-[#2A2A2A] hover:text-green-300 rounded border border-[#333] transition-colors flex items-center gap-1 mx-auto"
+                            className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-green-400 hover:bg-[#2A2A2A] hover:text-green-300 rounded border border-[#333] transition-colors flex items-center gap-1 mx-auto cursor-pointer"
                           >
                             <Plus className="w-3 h-3" />
                             <span>Register</span>
                           </button>
+                        ) : (
+                          <span className="text-[10px] text-gray-500 font-mono italic">
+                            Unregistered
+                          </span>
                         )}
                       </td>
 

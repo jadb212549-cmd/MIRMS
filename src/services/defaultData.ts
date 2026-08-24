@@ -447,7 +447,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   portableMode: true,
   adminCanAutoApproveOwnRevisions: true,
   requireApprovalForRevisions: true,
-  requireAdminApprovalForNewRegistrations: true
+  requireAdminApprovalForNewRegistrations: true,
+  hiddenDashboardProductCodes: []
 };
 
 export const INITIAL_MASTER_ITEMS: MasterItem[] = [

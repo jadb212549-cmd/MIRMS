@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ReferenceRegistration, MasterItem, AppConfig } from '../types';
 import { 
   ShieldCheck, 
@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { excelService } from '../services/excelService';
 import { wordService } from '../services/wordService';
+import { userService } from '../services/userService';
 import { InspectionProofModal } from './InspectionProofModal';
 import { RevisionAuditDossierModal } from './RevisionAuditDossierModal';
 
@@ -44,6 +45,15 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
   globalSearchQuery = '',
   onSearchChange
 }) => {
+  const [currentUser, setCurrentUser] = useState(userService.getCurrentUser());
+
+  useEffect(() => {
+    const unsubscribe = userService.subscribe(() => {
+      setCurrentUser(userService.getCurrentUser());
+    });
+    return () => unsubscribe();
+  }, []);
+
   const [localSearch, setLocalSearch] = useState('');
   const [proofRegistration, setProofRegistration] = useState<ReferenceRegistration | null>(null);
   const [auditRegistration, setAuditRegistration] = useState<ReferenceRegistration | null>(null);
@@ -203,13 +213,15 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
           </button>
 
           {/* Register New Reference */}
-          <button
-            onClick={onOpenCreateModal}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Register Reference Sample</span>
-          </button>
+          {currentUser && (
+            <button
+              onClick={onOpenCreateModal}
+              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors shrink-0 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Register Reference Sample</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -219,12 +231,14 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
           <ShieldCheck className="w-10 h-10 mx-auto text-gray-600 mb-2" />
           <h3 className="font-semibold text-gray-300 text-sm">No sample reference registrations found.</h3>
           <p className="text-xs text-gray-500 mt-1">Register a new physical specimen or adjust search parameters.</p>
-          <button
-            onClick={onOpenCreateModal}
-            className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Register Sample Now
-          </button>
+          {currentUser && (
+            <button
+              onClick={onOpenCreateModal}
+              className="mt-4 inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Register Sample Now
+            </button>
+          )}
         </div>
       ) : viewMode === 'GRID' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -342,30 +356,34 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                     {/* If item is pending approval: all functions are removed except View Details and Edit */}
                     {reg.status === 'PENDING_APPROVAL' ? (
                       <>
-                        <button
-                          onClick={() => onOpenEditModal(reg)}
-                          title="Edit Pending Registration"
-                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 transition-colors"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                          <span>Edit</span>
-                        </button>
+                        {currentUser && (
+                          <button
+                            onClick={() => onOpenEditModal(reg)}
+                            title="Edit Pending Registration"
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 transition-colors cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => onOpenDetailModal(reg)}
-                          className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-gray-200 hover:bg-[#2A2A2A] rounded border border-[#333] transition-colors"
+                          className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-gray-200 hover:bg-[#2A2A2A] rounded border border-[#333] transition-colors cursor-pointer"
                         >
                           View Details
                         </button>
                       </>
                     ) : (
                       <>
-                        <button
-                          onClick={() => onOpenEditModal(reg)}
-                          title="Edit / Propose Revision"
-                          className="p-1.5 text-gray-400 hover:text-amber-300 bg-[#1A1A1A] hover:bg-amber-500/10 rounded border border-[#333] hover:border-amber-500/30 transition-colors cursor-pointer"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
+                        {currentUser && (
+                          <button
+                            onClick={() => onOpenEditModal(reg)}
+                            title="Edit / Propose Revision"
+                            className="p-1.5 text-gray-400 hover:text-amber-300 bg-[#1A1A1A] hover:bg-amber-500/10 rounded border border-[#333] hover:border-amber-500/30 transition-colors cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           onClick={() => setAuditRegistration(reg)}
                           title="View Revision Audit History & Diff"
@@ -502,30 +520,34 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                         <div className="flex items-center justify-end gap-1.5">
                           {reg.status === 'PENDING_APPROVAL' ? (
                             <>
-                              <button
-                                onClick={() => onOpenEditModal(reg)}
-                                title="Edit Pending Registration"
-                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 transition-colors"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                                <span>Edit</span>
-                              </button>
+                              {currentUser && (
+                                <button
+                                  onClick={() => onOpenEditModal(reg)}
+                                  title="Edit Pending Registration"
+                                  className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 rounded border border-amber-500/30 transition-colors cursor-pointer"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <span>Edit</span>
+                                </button>
+                              )}
                               <button
                                 onClick={() => onOpenDetailModal(reg)}
-                                className="px-2.5 py-1 text-xs font-semibold bg-[#222] hover:bg-[#2A2A2A] text-gray-200 rounded border border-[#333] transition-colors"
+                                className="px-2.5 py-1 text-xs font-semibold bg-[#222] hover:bg-[#2A2A2A] text-gray-200 rounded border border-[#333] transition-colors cursor-pointer"
                               >
                                 Details
                               </button>
                             </>
                           ) : (
                             <>
-                              <button
-                                onClick={() => onOpenEditModal(reg)}
-                                title="Edit / Propose Revision"
-                                className="p-1 text-gray-400 hover:text-amber-300 bg-[#1A1A1A] hover:bg-amber-500/10 rounded border border-[#333] hover:border-amber-500/30 transition-colors cursor-pointer"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
+                              {currentUser && (
+                                <button
+                                  onClick={() => onOpenEditModal(reg)}
+                                  title="Edit / Propose Revision"
+                                  className="p-1 text-gray-400 hover:text-amber-300 bg-[#1A1A1A] hover:bg-amber-500/10 rounded border border-[#333] hover:border-amber-500/30 transition-colors cursor-pointer"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => setAuditRegistration(reg)}
                                 title="View Revision Audit History & Diff"
