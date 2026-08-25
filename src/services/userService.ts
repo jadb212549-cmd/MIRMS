@@ -244,6 +244,25 @@ class UserService {
     this.notifyListeners();
     return true;
   }
+
+  // Reset to factory settings (keep only ADMIN123)
+  public resetToFactory(): void {
+    const adminAccount = this.registeredUsers.find(u => u.idNumber === 'ADMIN123') || DEFAULT_USERS.find(u => u.idNumber === 'ADMIN123')!;
+    this.registeredUsers = [adminAccount];
+    localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
+    
+    // Reset allowed IDs to defaults
+    this.allowedIds = [...DEFAULT_ALLOWED_IDS];
+    localStorage.setItem(STORAGE_KEYS.ALLOWED_IDS, JSON.stringify(this.allowedIds));
+    
+    // Log out if the current user is not ADMIN123
+    if (this.currentUser && this.currentUser.idNumber !== 'ADMIN123') {
+      this.currentUser = null;
+      sessionStorage.removeItem(SESSION_KEYS.CURRENT_USER);
+    }
+    
+    this.notifyListeners();
+  }
 }
 
 export const userService = new UserService();

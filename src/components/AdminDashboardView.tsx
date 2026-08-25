@@ -367,6 +367,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     setIsRestoring(true);
     try {
       await db.resetToSampleData(defaultInspector);
+      userService.resetToFactory();
       await onRefreshData();
       setStatusMessage({ type: 'success', text: 'Factory settings restored successfully.' });
       setTimeout(() => window.location.reload(), 1500);

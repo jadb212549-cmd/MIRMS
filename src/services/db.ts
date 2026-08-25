@@ -2353,10 +2353,10 @@ class DatabaseService {
     }
   }
 
-  // Reset to default sample data
+  // Reset to empty factory settings
   public async resetToSampleData(author = 'Admin'): Promise<void> {
-    this.masterItems = [...INITIAL_MASTER_ITEMS];
-    this.registrations = [...INITIAL_REGISTRATIONS];
+    this.masterItems = [];
+    this.registrations = [];
     this.config = { ...DEFAULT_CONFIG };
     this.auditLogs = [
       {
@@ -2365,9 +2365,8 @@ class DatabaseService {
         user: author,
         action: 'RESTORE',
         entityType: 'SYSTEM',
-        details: 'Reset system database to clean initial demonstration reference state.'
-      },
-      ...INITIAL_AUDIT_LOGS
+        details: 'Restored system database to clean factory state (deleted all data).'
+      }
     ];
 
     this.saveMasterItems();
@@ -2375,7 +2374,7 @@ class DatabaseService {
     this.saveAuditLogs();
     this.saveLocalConfig();
 
-    realtimeSync.broadcastMutation('MUTATION_FULL_RESTORE', 'Database', 'Reset database to demo sample state');
+    realtimeSync.broadcastMutation('MUTATION_FULL_RESTORE', 'Database', 'Reset database to clean factory state');
     this.notifyListeners();
   }
 

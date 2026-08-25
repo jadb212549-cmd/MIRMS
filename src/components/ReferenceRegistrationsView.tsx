@@ -86,6 +86,7 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
         reg.productCode.toLowerCase().includes(term) ||
         (master && master.description.toLowerCase().includes(term)) ||
         (reg.supplier && reg.supplier.toLowerCase().includes(term)) ||
+        (reg.lotReference && reg.lotReference.toLowerCase().includes(term)) ||
         reg.registeredBy.toLowerCase().includes(term) ||
         (reg.specification && reg.specification.toLowerCase().includes(term)) ||
         (reg.remarks && reg.remarks.toLowerCase().includes(term));
@@ -331,6 +332,12 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                         <div className="flex items-center justify-between">
                           <span className="text-gray-500 font-sans">Supplier:</span>
                           <span className="truncate max-w-[140px] text-gray-300 font-sans">{reg.supplier}</span>
+                        </div>
+                      )}
+                      {reg.lotReference && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-gray-500 font-sans">Lot Ref:</span>
+                          <span className="truncate max-w-[140px] text-gray-300 font-sans">{reg.lotReference}</span>
                         </div>
                       )}
                     </div>

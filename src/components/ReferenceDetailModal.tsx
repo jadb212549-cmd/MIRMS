@@ -214,6 +214,12 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
               </strong>
             </div>
             <div>
+              <span className="text-gray-500 block text-[11px] font-mono">Lot Reference</span>
+              <strong className="text-gray-200 truncate block mt-0.5">
+                {registration.lotReference || 'N/A'}
+              </strong>
+            </div>
+            <div>
               <span className="text-gray-500 block text-[11px] font-mono">Inspection Status</span>
               {registration.status === 'APPROVED' ? (
                 <strong className="text-emerald-400 flex items-center gap-1 mt-0.5 font-mono">
