@@ -196,6 +196,13 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
   const [pdfCoordinateMappings, setPdfCoordinateMappings] = useState<Record<string, PdfCoordinateMapping>>({});
   const [detectedPdfFormFields, setDetectedPdfFormFields] = useState<string[]>([]);
   const [pdfMappingTab, setPdfMappingTab] = useState<'forms' | 'coordinates'>('forms');
+  const [copiedTag, setCopiedTag] = useState<string | null>(null);
+
+  const handleCopyTag = (tag: string) => {
+    navigator.clipboard.writeText(tag);
+    setCopiedTag(tag);
+    setTimeout(() => setCopiedTag(null), 2000);
+  };
 
   useEffect(() => {
     if (importFileType === 'pdf' && importFileContent) {
@@ -370,7 +377,6 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
 
     if (extension === 'docx') {
       setImportFileType('docx');
-      setImportFormType('material_reference_sheet');
       reader.onload = (event) => {
         const base64 = (event.target?.result as string).split(',')[1] || '';
         setImportFileContent(base64);
@@ -395,7 +401,6 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
       reader.readAsDataURL(file);
     } else if (extension === 'pdf') {
       setImportFileType('pdf');
-      setImportFormType('material_reference_sheet');
       reader.onload = (event) => {
         const base64 = (event.target?.result as string).split(',')[1] || '';
         setImportFileContent(base64);
@@ -1006,9 +1011,22 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
             >
               <div>
                 <div className="flex items-center justify-between gap-1.5">
-                  <code className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
-                    {opt.tag}
-                  </code>
+                  <div className="flex items-center gap-2">
+                    <code className="text-[11px] font-mono font-bold text-blue-300 bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20">
+                      {opt.tag}
+                    </code>
+                    <button
+                      onClick={() => handleCopyTag(opt.tag)}
+                      className="p-1 text-gray-500 hover:text-blue-400 hover:bg-[#222] rounded transition-colors"
+                      title="Copy placeholder tag"
+                    >
+                      {copiedTag === opt.tag ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                   <span className="text-[9px] font-mono text-gray-500 uppercase">
                     {opt.category}
                   </span>

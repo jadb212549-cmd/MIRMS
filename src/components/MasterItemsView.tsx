@@ -1,18 +1,18 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { MasterItem, ReferenceRegistration, ItemCategory, ItemStatus } from '../types';
-import { Database, Plus, Search, Filter, FileSpreadsheet, ShieldCheck, Edit3, Trash2, ShieldAlert, Calendar, X, Clock, Check, ChevronDown, Sparkles, RefreshCw, Camera, User } from 'lucide-react';
+import { Database, Plus, Search, Filter, FileSpreadsheet, ShieldCheck, Calendar, X, Clock, Check, ChevronDown, Sparkles, RefreshCw, Camera, User } from 'lucide-react';
 import { excelService } from '../services/excelService';
 import { userService } from '../services/userService';
 
 interface MasterItemsViewProps {
   masterItems: MasterItem[];
   registrations: ReferenceRegistration[];
-  onOpenCreateModal: () => void;
-  onOpenEditModal: (item: MasterItem) => void;
-  onDeleteMasterItem: (id: string) => Promise<void>;
-  onRegisterReference: (item: MasterItem) => void;
-  onViewReference: (reg: ReferenceRegistration) => void;
-  onNavigateTab: (tab: any) => void;
+  onOpenCreateModal?: () => void;
+  onOpenEditModal?: (item: MasterItem) => void;
+  onDeleteMasterItem?: (id: string) => Promise<void>;
+  onRegisterReference?: (item: MasterItem) => void;
+  onViewReference?: (reg: ReferenceRegistration) => void;
+  onNavigateTab?: (tab: any) => void;
   globalSearchQuery?: string;
   onSearchChange?: (query: string) => void;
 }
@@ -77,8 +77,6 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-
-  const [itemToDelete, setItemToDelete] = useState<MasterItem | null>(null);
 
   // Map of registrations by productCode
   const regMap = useMemo(() => {
@@ -508,8 +506,6 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-[#0A0A0A] border-b border-[#222] text-gray-500 font-mono uppercase tracking-wider text-[10px]">
-                {currentUser && <th className="py-3 px-3 w-20 text-center font-medium">Actions</th>}
-                <th className="py-3 px-3 w-28 text-center font-medium">Reference</th>
                 <th className="py-3 px-4 w-36 font-medium">Product Code</th>
                 <th className="py-3 px-4 font-medium">Material / Item Description</th>
                 <th className="py-3 px-3 w-20 font-medium">Type</th>
@@ -523,7 +519,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
             <tbody className="divide-y divide-[#222]">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={currentUser ? 10 : 9} className="py-12 text-center text-gray-500">
+                  <td colSpan={8} className="py-12 text-center text-gray-500">
                     <Database className="w-8 h-8 mx-auto text-gray-600 mb-2" />
                     <p className="font-semibold text-gray-300">No master reference items matched your filter criteria.</p>
                     <p className="text-xs text-gray-500 mt-1">Try clearing search, date, or category filters.</p>
@@ -546,55 +542,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
 
                   return (
                     <tr key={item.id} className="hover:bg-[#1A1A1A] transition-colors group">
-                      {/* 1. Actions (Edit & Delete) - Only if logged in */}
-                      {currentUser && (
-                        <td className="py-3 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              onClick={() => onOpenEditModal(item)}
-                              title="Edit Master Item"
-                              className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-[#252525] rounded transition-colors cursor-pointer"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                            </button>
-                            {isAdmin && (
-                              <button
-                                onClick={() => setItemToDelete(item)}
-                                title="Delete Master Item"
-                                className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
-
-                      {/* 2. View / Register Reference */}
-                      <td className="py-3 px-3 text-center">
-                        {isRegistered ? (
-                          <button
-                            onClick={() => onViewReference(reg!)}
-                            className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-blue-400 hover:bg-[#2A2A2A] hover:text-blue-300 rounded border border-[#333] transition-colors cursor-pointer"
-                          >
-                            View
-                          </button>
-                        ) : currentUser ? (
-                          <button
-                            onClick={() => onRegisterReference(item)}
-                            className="px-2.5 py-1 text-xs font-semibold bg-[#222] text-green-400 hover:bg-[#2A2A2A] hover:text-green-300 rounded border border-[#333] transition-colors flex items-center gap-1 mx-auto cursor-pointer"
-                          >
-                            <Plus className="w-3 h-3" />
-                            <span>Register</span>
-                          </button>
-                        ) : (
-                          <span className="text-[10px] text-gray-500 font-mono italic">
-                            Unregistered
-                          </span>
-                        )}
-                      </td>
-
-                      {/* 3. Product Code (Hover Flashes Primary Image) */}
+                      {/* 1. Product Code (Hover Flashes Primary Image) */}
                       <td className="py-3 px-4 font-mono font-bold text-blue-400 relative group/code">
                         <span className="hover:underline flex items-center gap-1.5 cursor-pointer">
                           {item.productCode}
@@ -725,49 +673,6 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Delete Confirmation Modal */}
-      {itemToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[#161616] rounded-xl shadow-2xl border border-[#333] w-full max-w-md p-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-lg shrink-0">
-                <Trash2 className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-white">Delete Master Reference Item</h3>
-                <p className="text-xs text-gray-400 mt-1">
-                  Are you sure you want to remove <strong className="text-blue-400 font-mono">{itemToDelete.productCode}</strong> from the master list?
-                </p>
-                {regMap.has(itemToDelete.productCode.toLowerCase()) && (
-                  <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] rounded-md flex items-center gap-1.5">
-                    <ShieldAlert className="w-4 h-4 shrink-0 text-amber-400" />
-                    <span>Warning: A registered sample specimen is linked to this code. You must delete the sample registration first.</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="mt-5 pt-3 border-t border-[#222] flex items-center justify-end gap-2">
-              <button
-                onClick={() => setItemToDelete(null)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-gray-400 hover:text-gray-200 hover:bg-[#222] rounded-lg transition-colors border border-transparent"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  await onDeleteMasterItem(itemToDelete.id);
-                  setItemToDelete(null);
-                }}
-                className="px-4 py-1.5 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition-colors"
-              >
-                Confirm Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

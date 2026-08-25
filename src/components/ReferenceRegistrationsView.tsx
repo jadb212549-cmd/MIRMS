@@ -16,13 +16,16 @@ import {
   Printer, 
   History,
   Clock,
-  Edit3
+  Edit3,
+  FileCheck,
+  X
 } from 'lucide-react';
 import { excelService } from '../services/excelService';
 import { wordService } from '../services/wordService';
 import { userService } from '../services/userService';
 import { InspectionProofModal } from './InspectionProofModal';
 import { RevisionAuditDossierModal } from './RevisionAuditDossierModal';
+import { MaterialReferenceSheetModal } from './MaterialReferenceSheetModal';
 
 interface ReferenceRegistrationsViewProps {
   registrations: ReferenceRegistration[];
@@ -57,6 +60,7 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
   const [localSearch, setLocalSearch] = useState('');
   const [proofRegistration, setProofRegistration] = useState<ReferenceRegistration | null>(null);
   const [auditRegistration, setAuditRegistration] = useState<ReferenceRegistration | null>(null);
+  const [sheetRegistration, setSheetRegistration] = useState<ReferenceRegistration | null>(null);
   const searchTerm = globalSearchQuery || localSearch;
 
   const handleSearchChange = (val: string) => {
@@ -113,116 +117,156 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
   return (
     <div className="space-y-4 select-none">
       {/* Control & Filter Header */}
-      <div className="bg-[#141414] p-4 rounded-xl border border-[#222] flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search registered samples by Code, Description, Supplier, Registered By, or Specs..."
-            value={searchTerm}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs bg-[#1A1A1A] border border-[#333] text-gray-200 placeholder-gray-500 rounded-lg focus:outline-hidden focus:border-blue-500 transition-colors"
-          />
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Category Filter */}
-          <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
-            <span className="text-gray-400 font-medium">Category:</span>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value as any)}
-              className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer"
-            >
-              <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Categories</option>
-              <option value="RM" className="bg-[#1A1A1A] text-gray-200">Raw Material (RM)</option>
-              <option value="PS" className="bg-[#1A1A1A] text-gray-200">Prod Supply (PS)</option>
-            </select>
+      <div className="bg-[#141414] p-4 rounded-xl border border-[#222] space-y-3">
+        {/* Top Row: Large Search Bar & Primary Actions */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Large Expanded Search Field */}
+          <div className="relative flex-1">
+            <Search className="w-5 h-5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search registered samples by Product Code, Description, Supplier, Lot, Registered By, or Specification..."
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="w-full pl-11 pr-10 py-3 text-sm bg-[#1A1A1A] border border-[#333] text-gray-100 placeholder-gray-500 rounded-xl focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-inner"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                onClick={() => handleSearchChange('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-200 hover:bg-[#252525] rounded-md transition-colors cursor-pointer"
+                title="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
-          {/* Form Status Filter */}
-          <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
-            <span className="text-gray-400 font-medium">Word Form:</span>
-            <select
-              value={formFilter}
-              onChange={(e) => setFormFilter(e.target.value as any)}
-              className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer"
-            >
-              <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Status</option>
-              <option value="GENERATED" className="bg-[#1A1A1A] text-gray-200">Generated Form</option>
-              <option value="PENDING" className="bg-[#1A1A1A] text-gray-200">Pending Form</option>
-            </select>
-          </div>
-
-          {/* Approval Status Filter */}
-          <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
-            <span className="text-gray-400 font-medium">Approval:</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer"
-            >
-              <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Approval States</option>
-              <option value="APPROVED" className="bg-[#1A1A1A] text-emerald-400">Approved (Official)</option>
-              <option value="PENDING_REVISION" className="bg-[#1A1A1A] text-amber-400">Pending Revision</option>
-              <option value="PENDING_APPROVAL" className="bg-[#1A1A1A] text-blue-400">Pending Initial Approval</option>
-              <option value="REJECTED" className="bg-[#1A1A1A] text-red-400">Rejected</option>
-            </select>
-          </div>
-
-          {/* Grid / Table View toggle */}
-          <div className="flex items-center bg-[#1A1A1A] p-0.5 rounded-lg border border-[#333]">
-            <button
-              onClick={() => setViewMode('GRID')}
-              className={`p-1.5 rounded-md text-xs transition-colors ${
-                viewMode === 'GRID' ? 'bg-[#2A2A2A] text-blue-400 shadow-xs' : 'text-gray-400 hover:text-gray-200'
-              }`}
-              title="Grid Cards View"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setViewMode('TABLE')}
-              className={`p-1.5 rounded-md text-xs transition-colors ${
-                viewMode === 'TABLE' ? 'bg-[#2A2A2A] text-blue-400 shadow-xs' : 'text-gray-400 hover:text-gray-200'
-              }`}
-              title="Table Dense View"
-            >
-              <List className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Export buttons */}
-          <button
-            onClick={() => excelService.exportRegistrations(filteredRegistrations, masterItems)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] rounded-lg border border-[#333] transition-colors"
-            title="Export Reference Samples to Excel"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-green-400" />
-            <span className="hidden sm:inline">Export Excel</span>
-          </button>
-
-          <button
-            onClick={() => excelService.exportRevisionAuditHistory(filteredRegistrations, masterItems)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg border border-purple-500/20 transition-colors"
-            title="Export Complete Revision History & Audit Trail to Excel (.xlsx)"
-          >
-            <History className="w-3.5 h-3.5 text-purple-400" />
-            <span className="hidden sm:inline">Audit Log (.xlsx)</span>
-          </button>
-
-          {/* Register New Reference */}
+          {/* Register New Reference Button */}
           {currentUser && (
             <button
+              type="button"
               onClick={onOpenCreateModal}
-              className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition-colors shrink-0 cursor-pointer"
+              className="flex items-center justify-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 active:bg-blue-700 rounded-xl shadow-md shadow-blue-600/20 transition-all shrink-0 cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="w-4 h-4" />
               <span>Register Reference Sample</span>
             </button>
           )}
+        </div>
+
+        {/* Bottom Row: Filters, View Toggle, and Exports */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#1F1F1F]">
+          {/* Left: Filter Selectors */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Category Filter */}
+            <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
+              <span className="text-gray-400 font-medium">Category:</span>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value as any)}
+                className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer"
+              >
+                <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Categories</option>
+                <option value="RM" className="bg-[#1A1A1A] text-gray-200">Raw Material (RM)</option>
+                <option value="PS" className="bg-[#1A1A1A] text-gray-200">Prod Supply (PS)</option>
+              </select>
+            </div>
+
+            {/* Form Status Filter */}
+            <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
+              <span className="text-gray-400 font-medium">Word Form:</span>
+              <select
+                value={formFilter}
+                onChange={(e) => setFormFilter(e.target.value as any)}
+                className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer"
+              >
+                <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Status</option>
+                <option value="GENERATED" className="bg-[#1A1A1A] text-gray-200">Generated Form</option>
+                <option value="PENDING" className="bg-[#1A1A1A] text-gray-200">Pending Form</option>
+              </select>
+            </div>
+
+            {/* Approval Status Filter */}
+            <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
+              <span className="text-gray-400 font-medium">Approval:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="bg-transparent font-semibold text-gray-200 focus:outline-hidden cursor-pointer"
+              >
+                <option value="ALL" className="bg-[#1A1A1A] text-gray-200">All Approval States</option>
+                <option value="APPROVED" className="bg-[#1A1A1A] text-emerald-400">Approved (Official)</option>
+                <option value="PENDING_REVISION" className="bg-[#1A1A1A] text-amber-400">Pending Revision</option>
+                <option value="PENDING_APPROVAL" className="bg-[#1A1A1A] text-blue-400">Pending Initial Approval</option>
+                <option value="REJECTED" className="bg-[#1A1A1A] text-red-400">Rejected</option>
+              </select>
+            </div>
+
+            {/* Clear Filters (if active) */}
+            {(searchTerm || categoryFilter !== 'ALL' || formFilter !== 'ALL' || statusFilter !== 'ALL') && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleSearchChange('');
+                  setCategoryFilter('ALL');
+                  setFormFilter('ALL');
+                  setStatusFilter('ALL');
+                }}
+                className="text-xs text-blue-400 hover:text-blue-300 font-medium underline px-1 py-1 cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            )}
+          </div>
+
+          {/* Right: Results Count, View Toggle, and Exports */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono text-gray-500 hidden lg:inline mr-1">
+              Showing {filteredRegistrations.length} of {registrations.length}
+            </span>
+
+            {/* Grid / Table View toggle */}
+            <div className="flex items-center bg-[#1A1A1A] p-0.5 rounded-lg border border-[#333]">
+              <button
+                onClick={() => setViewMode('GRID')}
+                className={`p-1.5 rounded-md text-xs transition-colors cursor-pointer ${
+                  viewMode === 'GRID' ? 'bg-[#2A2A2A] text-blue-400 shadow-xs' : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Grid Cards View"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('TABLE')}
+                className={`p-1.5 rounded-md text-xs transition-colors cursor-pointer ${
+                  viewMode === 'TABLE' ? 'bg-[#2A2A2A] text-blue-400 shadow-xs' : 'text-gray-400 hover:text-gray-200'
+                }`}
+                title="Table Dense View"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Export buttons */}
+            <button
+              onClick={() => excelService.exportRegistrations(filteredRegistrations, masterItems)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] rounded-lg border border-[#333] transition-colors cursor-pointer"
+              title="Export Reference Samples to Excel"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-green-400" />
+              <span className="hidden sm:inline">Export Excel</span>
+            </button>
+
+            <button
+              onClick={() => excelService.exportRevisionAuditHistory(filteredRegistrations, masterItems)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 rounded-lg border border-purple-500/20 transition-colors cursor-pointer"
+              title="Export Complete Revision History & Audit Trail to Excel (.xlsx)"
+            >
+              <History className="w-3.5 h-3.5 text-purple-400" />
+              <span className="hidden sm:inline">Audit Log</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -398,6 +442,13 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                         >
                           <History className="w-3.5 h-3.5" />
                         </button>
+                        <button
+                          onClick={() => setSheetRegistration(reg)}
+                          title="View Material Reference Sheet"
+                          className="p-1.5 text-gray-400 hover:text-blue-400 bg-[#1A1A1A] hover:bg-blue-500/10 rounded border border-[#333] hover:border-blue-500/30 transition-colors cursor-pointer"
+                        >
+                          <FileCheck className="w-3.5 h-3.5" />
+                        </button>
                         {currentUser && (
                           <button
                             onClick={() => setProofRegistration(reg)}
@@ -564,6 +615,13 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
                               >
                                 <History className="w-3.5 h-3.5" />
                               </button>
+                              <button
+                                onClick={() => setSheetRegistration(reg)}
+                                title="View Material Reference Sheet"
+                                className="p-1 text-gray-400 hover:text-blue-400 bg-[#1A1A1A] hover:bg-blue-500/10 rounded border border-[#333] hover:border-blue-500/30 transition-colors cursor-pointer"
+                              >
+                                <FileCheck className="w-3.5 h-3.5" />
+                              </button>
                               {currentUser && (
                                 <button
                                   onClick={() => setProofRegistration(reg)}
@@ -601,6 +659,17 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
             </table>
           </div>
         </div>
+      )}
+
+      {/* Material Reference Sheet Modal */}
+      {sheetRegistration && (
+        <MaterialReferenceSheetModal
+          isOpen={!!sheetRegistration}
+          onClose={() => setSheetRegistration(null)}
+          registration={sheetRegistration}
+          masterItem={masterMap.get(sheetRegistration.productCode.toLowerCase())}
+          config={config}
+        />
       )}
 
       {/* Print Inspection Proof Modal */}

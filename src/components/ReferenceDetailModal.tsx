@@ -24,6 +24,7 @@ import { InspectionProofModal } from './InspectionProofModal';
 import { RevisionAuditSnapshotModal } from './RevisionAuditSnapshotModal';
 import { RevisionCompareModal } from './RevisionCompareModal';
 import { RevisionAuditDossierModal } from './RevisionAuditDossierModal';
+import { MaterialReferenceSheetModal } from './MaterialReferenceSheetModal';
 import { db } from '../services/db';
 import { userService } from '../services/userService';
 
@@ -49,6 +50,7 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
   const [currentUser, setCurrentUser] = useState(userService.getCurrentUser());
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [showInspectionProof, setShowInspectionProof] = useState(false);
+  const [showMaterialReferenceSheet, setShowMaterialReferenceSheet] = useState(false);
   const [isGeneratingDoc, setIsGeneratingDoc] = useState(false);
   
   // Auditing & Revision Snapshot Modals
@@ -543,6 +545,15 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
                 )
               ) : (
                 <>
+                  <button
+                    type="button"
+                    onClick={() => setShowMaterialReferenceSheet(true)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-sm transition-colors cursor-pointer"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>View Reference Sheet</span>
+                  </button>
+
                   {currentUser && (
                     <button
                       type="button"
@@ -557,10 +568,10 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
                   <button
                     onClick={handleGenerateWordForm}
                     disabled={isGeneratingDoc || !masterItem}
-                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] border border-[#333] rounded-lg transition-colors disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-gray-200 bg-[#222] hover:bg-[#2A2A2A] border border-[#333] rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                   >
-                    <FileText className="w-4 h-4 text-blue-400" />
-                    <span>{isGeneratingDoc ? 'Generating DOCX...' : 'Generate Word Form (DOCX)'}</span>
+                    <Download className="w-4 h-4 text-blue-400" />
+                    <span>{isGeneratingDoc ? 'Generating DOCX...' : 'Word Form (DOCX)'}</span>
                   </button>
                 </>
               )}
@@ -600,6 +611,15 @@ export const ReferenceDetailModal: React.FC<ReferenceDetailModalProps> = ({
           />
         </div>
       )}
+
+      {/* Material Reference Sheet Modal */}
+      <MaterialReferenceSheetModal
+        isOpen={showMaterialReferenceSheet}
+        onClose={() => setShowMaterialReferenceSheet(false)}
+        registration={registration}
+        masterItem={masterItem}
+        config={config}
+      />
 
       {/* Print Inspection Proof Modal */}
       <InspectionProofModal

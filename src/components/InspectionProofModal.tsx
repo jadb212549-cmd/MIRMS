@@ -15,6 +15,7 @@ import {
   Layers,
   LayoutTemplate
 } from 'lucide-react';
+import mammoth from 'mammoth';
 import { userService, AppUser } from '../services/userService';
 import { db } from '../services/db';
 import { buildSystemDataDictionary, renderHtmlTemplateWithData } from '../services/templateDefaults';
@@ -37,6 +38,7 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
   const [adminUsers, setAdminUsers] = useState<AppUser[]>([]);
   const [selectedAdminId, setSelectedAdminId] = useState<string>('');
   const [activeTemplate, setActiveTemplate] = useState<FormTemplate | null>(null);
+  const [convertedDocxHtml, setConvertedDocxHtml] = useState<string | null>(null);
   const [printTimestamp, setPrintTimestamp] = useState<{ date: string; time: string; full: string }>({
     date: '',
     time: '',
@@ -59,10 +61,18 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
         setSelectedAdminId(admins[0].idNumber);
       }
 
-      db.getActiveFormTemplate('inspection_proof_slip').then(tpl => {
-        setActiveTemplate(tpl);
-      }).catch(err => {
-        console.warn('Failed to load active inspection proof template:', err);
+      const fetchActiveTemplate = () => {
+        db.getActiveFormTemplate('inspection_proof_slip').then(tpl => {
+          setActiveTemplate(tpl);
+        }).catch(err => {
+          console.warn('Failed to load active inspection proof template:', err);
+        });
+      };
+
+      fetchActiveTemplate();
+
+      const unsubscribe = db.subscribe(() => {
+        fetchActiveTemplate();
       });
 
       // Generate current print timestamp
@@ -83,8 +93,48 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
         time: timeStr,
         full: `${dateStr} ${timeStr}`
       });
+
+      return () => {
+        unsubscribe();
+      };
     }
   }, [isOpen, registration]);
+
+  // Convert DOCX if active template is docx
+  useEffect(() => {
+    if (!isOpen || !activeTemplate) {
+      setConvertedDocxHtml(null);
+      return;
+    }
+
+    if (activeTemplate.fileType === 'docx' && activeTemplate.fileContent) {
+      try {
+        const cleanBase64 = activeTemplate.fileContent.includes(',')
+          ? activeTemplate.fileContent.split(',')[1]
+          : activeTemplate.fileContent;
+        const binaryString = atob(cleanBase64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        mammoth.convertToHtml({ arrayBuffer: bytes.buffer })
+          .then(result => {
+            const rawHtml = result.value;
+            setConvertedDocxHtml(rawHtml);
+          })
+          .catch(err => {
+            console.warn('Failed to convert docx proof template with mammoth:', err);
+            setConvertedDocxHtml(null);
+          });
+      } catch (err) {
+        console.warn('Docx proof template parse error:', err);
+        setConvertedDocxHtml(null);
+      }
+    } else {
+      setConvertedDocxHtml(null);
+    }
+  }, [activeTemplate, isOpen]);
 
   if (!isOpen || !registration) return null;
 
@@ -112,14 +162,50 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
     systemDataDict.printTimestamp = printTimestamp.time;
   }
 
-  const customRenderedHtml = activeTemplate && activeTemplate.fileContent
-    ? renderHtmlTemplateWithData(
-        activeTemplate.fileContent,
-        systemDataDict,
-        activeTemplate.fieldMappings,
-        activeTemplate.customCss
-      )
-    : null;
+  let customRenderedHtml: string | null = null;
+  if (activeTemplate?.fileType === 'docx' && convertedDocxHtml) {
+    customRenderedHtml = renderHtmlTemplateWithData(
+      `<div class="proof-container docx-proof-content">${convertedDocxHtml}</div>`,
+      systemDataDict,
+      activeTemplate.fieldMappings,
+      activeTemplate.customCss || `
+        .docx-proof-content {
+          padding: 16px;
+          background: #ffffff;
+          color: #0f172a;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+          font-size: 11px;
+        }
+        .docx-proof-content table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 8px 0;
+        }
+        .docx-proof-content td, .docx-proof-content th {
+          border: 1px solid #cbd5e1;
+          padding: 4px 8px;
+        }
+      `
+    );
+  } else if (activeTemplate?.fileType === 'txt' && activeTemplate.fileContent) {
+    const renderedTxt = renderHtmlTemplateWithData(
+      activeTemplate.fileContent,
+      systemDataDict,
+      activeTemplate.fieldMappings
+    );
+    customRenderedHtml = `
+      <div class="proof-container" style="background:#fff; color:#0f172a; padding:16px; font-family:monospace; font-size:10px; white-space:pre-wrap; border:2px solid #0f172a; border-radius:6px; line-height:1.4;">
+        ${renderedTxt}
+      </div>
+    `;
+  } else if (activeTemplate && activeTemplate.fileContent) {
+    customRenderedHtml = renderHtmlTemplateWithData(
+      activeTemplate.fileContent,
+      systemDataDict,
+      activeTemplate.fieldMappings,
+      activeTemplate.customCss
+    );
+  }
 
   const handlePrint = () => {
     setIsPrinting(true);
@@ -634,7 +720,7 @@ export const InspectionProofModal: React.FC<InspectionProofModalProps> = ({
 
             {/* Visual Container */}
             <div className="w-full flex justify-center py-2">
-              {activeTemplate && !activeTemplate.isBuiltIn && customRenderedHtml ? (
+              {activeTemplate && customRenderedHtml ? (
                 <div 
                   ref={printAreaRef}
                   id="inspection-proof-print-container"
