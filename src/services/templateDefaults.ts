@@ -122,6 +122,14 @@ export const SYSTEM_FORM_FIELDS: SystemFieldOption[] = [
     description: 'Vendor, supplier, or authorized manufacturing source'
   },
   {
+    key: 'lotReference',
+    tag: '{{lotReference}}',
+    label: 'Lot Reference',
+    category: 'Registration & Inspection',
+    sampleValue: 'LOT-2026-X12',
+    description: 'Lot, Batch, or Heat number for material traceability'
+  },
+  {
     key: 'specification',
     tag: '{{specification}}',
     label: 'Technical Specification',
@@ -1120,6 +1128,7 @@ export function buildSystemDataDictionary(
     registrationDate: new Date().toISOString().split('T')[0],
     registeredBy: 'Juan Dela Cruz',
     supplier: 'Apex Metal Alloys Inc.',
+    lotReference: 'LOT-2026-X12',
     specification: 'ASTM A240 standard. Chemical composition: Cr 18.2%, Ni 8.1%, C <= 0.07%. Surface roughness Ra <= 0.4um. Mill test certificate attached. Verified non-magnetic and passivated.',
     remarks: 'Approved standard reference sample for batch acceptance testing in stamping line.',
     revision: 'Rev 01',
@@ -1174,6 +1183,7 @@ export function buildSystemDataDictionary(
     registeredBy: reg.registeredBy || cfg.defaultRegisteredBy || 'QA Inspector',
     registeredById: empId,
     supplier: reg.supplier || 'Standard Approved Vendor',
+    lotReference: reg.lotReference || 'N/A',
     specification: reg.specification || 'Conforms to manufacturer technical specifications and ISO 9001 quality criteria.',
     remarks: reg.remarks || 'Standard QA reference specimen on active archive.',
     inspectionResult: 'VERIFIED & CONFORMANT',

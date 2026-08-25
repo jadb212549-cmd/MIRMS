@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { MasterItem, MaterialType, ItemStatus } from '../types';
-import { X, Database, AlertCircle, Plus } from 'lucide-react';
+import { X, Database, AlertCircle, Plus, AlertTriangle } from 'lucide-react';
 import { db } from '../services/db';
 
 interface MasterItemModalProps {
@@ -32,6 +32,8 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
   const [unit, setUnit] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showDuplicatePop, setShowDuplicatePop] = useState(false);
+  const [duplicateCode, setDuplicateCode] = useState('');
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -85,6 +87,17 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
       return;
     }
 
+    const codeClean = productCode.trim().toLowerCase();
+    const isDuplicate = existingProductCodes?.some(
+      (code) => code.toLowerCase() === codeClean && (!targetItem || targetItem.productCode.toLowerCase() !== codeClean)
+    );
+
+    if (isDuplicate) {
+      setDuplicateCode(productCode.trim());
+      setShowDuplicatePop(true);
+      return;
+    }
+
     setIsSaving(true);
     setError(null);
 
@@ -101,7 +114,13 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
     if (res.success) {
       onClose();
     } else {
-      setError(res.error || 'Failed to save master item.');
+      const errStr = res.error || '';
+      if (errStr.toLowerCase().includes('already exists') || errStr.toLowerCase().includes('duplicate')) {
+        setDuplicateCode(productCode.trim());
+        setShowDuplicatePop(true);
+      } else {
+        setError(res.error || 'Failed to save master item.');
+      }
     }
   };
 
@@ -302,6 +321,32 @@ export const MasterItemModal: React.FC<MasterItemModalProps> = ({
           </div>
         </form>
       </div>
+
+      {showDuplicatePop && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#1C1C1C] rounded-xl border border-red-500/40 shadow-2xl p-6 max-w-sm w-full text-center space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="mx-auto w-12 h-12 bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center text-red-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-gray-100">Duplicate Item Code Detected</h4>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                The product code <span className="font-mono font-bold text-red-400">"{duplicateCode}"</span> already exists in the system.
+              </p>
+            </div>
+            <p className="text-xs text-gray-500 bg-[#121212] p-2.5 rounded-lg border border-[#222]">
+              Each master reference item must have a completely unique code to ensure database consistency and avoid tracking overlaps.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowDuplicatePop(false)}
+              className="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+            >
+              OK, I Understand
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -4,9 +4,24 @@
   body {
     background-color: #0a0a0a;
     color: #e5e7eb;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    /* Bulletproof font fallback stack prioritizing local system fonts over external ones */
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     margin: 0;
     padding: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Safe fallback constraints for embedded SVG icons in legacy rendering engines */
+  svg {
+    display: inline-block;
+    vertical-align: middle;
+    shape-rendering: geometricPrecision;
+  }
+  
+  svg:not([width]):not([height]) {
+    max-width: 100%;
+    height: auto;
   }
 }
 

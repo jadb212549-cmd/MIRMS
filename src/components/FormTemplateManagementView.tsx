@@ -24,6 +24,7 @@ import {
 import {
   pdfService
 } from '../services/pdfService';
+import { wordService } from '../services/wordService';
 import { PdfViewer } from './PdfViewer';
 import {
   LayoutTemplate,
@@ -80,15 +81,7 @@ const DocxModalPreview: React.FC<{
       containerRef.current.innerHTML = '';
 
       try {
-        const binaryString = atob(template.fileContent);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes.buffer], {
-          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        });
+        const blob = await wordService.processDocxTemplate(template.fileContent, sampleDict);
 
         await renderAsync(blob, containerRef.current, undefined, {
           className: 'docx-doc-render',
@@ -389,6 +382,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
           '{{category}}': 'category',
           '{{description}}': 'description',
           '{{supplier}}': 'supplier',
+          '{{lotReference}}': 'lotReference',
           '{{unit}}': 'unit',
           '{{registrationDate}}': 'registrationDate',
           '{{registeredBy}}': 'registeredBy',
@@ -412,6 +406,7 @@ export const FormTemplateManagementView: React.FC<FormTemplateManagementViewProp
           '{{category}}': 'category',
           '{{description}}': 'description',
           '{{supplier}}': 'supplier',
+          '{{lotReference}}': 'lotReference',
           '{{unit}}': 'unit',
           '{{registrationDate}}': 'registrationDate',
           '{{registeredBy}}': 'registeredBy',

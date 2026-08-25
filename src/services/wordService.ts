@@ -19,6 +19,75 @@ import { db } from './db';
 
 export const wordService = {
   /**
+   * Processes a DOCX template's base64 content and replaces placeholders using JSZip.
+   */
+  async processDocxTemplate(
+    base64Content: string,
+    replacements: Record<string, string>
+  ): Promise<Blob> {
+    const binaryString = atob(base64Content);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    const zip = await JSZip.loadAsync(bytes.buffer);
+
+    // XML replacement logic per paragraph node
+    const replacePlaceholdersInXml = (xmlStr: string): string => {
+      let updated = xmlStr;
+      updated = updated.replace(/<w:p(?:\s+[^>]*>|>)([\s\S]*?)<\/w:p>/g, (pMatch) => {
+        const tMatches: string[] = [];
+        pMatch.replace(/<w:t(?:\s+[^>]*>|>)([\s\S]*?)<\/w:t>/g, (_, tContent) => {
+          tMatches.push(tContent);
+          return '';
+        });
+
+        const fullText = tMatches.join('');
+        if (!fullText.includes('{{')) return pMatch;
+
+        let subText = fullText;
+        Object.entries(replacements).forEach(([key, val]) => {
+          const tagPattern = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
+          const safeVal = (val ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          subText = subText.replace(tagPattern, safeVal);
+        });
+
+        if (subText === fullText) return pMatch;
+
+        let firstReplaced = false;
+        return pMatch.replace(/<w:t(?:\s+[^>]*>|>)([\s\S]*?)<\/w:t>/g, () => {
+          if (!firstReplaced) {
+            firstReplaced = true;
+            return `<w:t xml:space="preserve">${subText}</w:t>`;
+          }
+          return `<w:t xml:space="preserve"></w:t>`;
+        });
+      });
+      return updated;
+    };
+
+    const fileKeys = Object.keys(zip.files).filter(k => 
+      k.startsWith('word/document') || k.startsWith('word/header') || k.startsWith('word/footer')
+    );
+
+    for (const fileKey of fileKeys) {
+      const zipFile = zip.file(fileKey);
+      if (zipFile) {
+        const rawXml = await zipFile.async('text');
+        const processedXml = replacePlaceholdersInXml(rawXml);
+        zip.file(fileKey, processedXml);
+      }
+    }
+
+    return await zip.generateAsync({
+      type: 'blob',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    });
+  },
+
+  /**
    * Generates a comprehensive, professional Microsoft Word (.docx) document
    * for the specified reference registration and master item.
    */
@@ -46,15 +115,6 @@ export const wordService = {
     // If a custom Word template (.docx base64) was uploaded, process it using JSZip
     if (activeTemplateContent) {
       try {
-        const binaryString = atob(activeTemplateContent);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-
-        const zip = await JSZip.loadAsync(bytes.buffer);
-
         // Build key-value replacements dictionary
         const replacements: Record<string, string> = {
           productCode: registration.productCode || masterItem.productCode || '',
@@ -72,6 +132,7 @@ export const wordService = {
           registrationId: registration.id,
           proofId: `IP-${registration.productCode.replace(/[^a-zA-Z0-9]/g, '')}-${registration.id.slice(-6)}`,
           supplier: registration.supplier || 'N/A',
+          lotReference: registration.lotReference || 'N/A',
           specification: registration.specification || 'N/A',
           remarks: registration.remarks || 'None',
           photosCount: String(registration.photos?.length || 0),
@@ -110,58 +171,8 @@ export const wordService = {
             replacements[k.toLowerCase()] = valStr;
           });
         }
-
-        // XML replacement logic per paragraph node
-        const replacePlaceholdersInXml = (xmlStr: string): string => {
-          let updated = xmlStr;
-          updated = updated.replace(/<w:p(?:\s+[^>]*>|>)([\s\S]*?)<\/w:p>/g, (pMatch) => {
-            const tMatches: string[] = [];
-            pMatch.replace(/<w:t(?:\s+[^>]*>|>)([\s\S]*?)<\/w:t>/g, (_, tContent) => {
-              tMatches.push(tContent);
-              return '';
-            });
-            const fullText = tMatches.join('');
-            if (!fullText.includes('{{')) return pMatch;
-
-            let subText = fullText;
-            Object.entries(replacements).forEach(([key, val]) => {
-              const tagPattern = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
-              const safeVal = (val ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-              subText = subText.replace(tagPattern, safeVal);
-            });
-
-            if (subText === fullText) return pMatch;
-
-            let firstReplaced = false;
-            return pMatch.replace(/<w:t(?:\s+[^>]*>|>)([\s\S]*?)<\/w:t>/g, () => {
-              if (!firstReplaced) {
-                firstReplaced = true;
-                return `<w:t xml:space="preserve">${subText}</w:t>`;
-              }
-              return `<w:t xml:space="preserve"></w:t>`;
-            });
-          });
-          return updated;
-        };
-
-        const fileKeys = Object.keys(zip.files).filter(k => 
-          k.startsWith('word/document') || k.startsWith('word/header') || k.startsWith('word/footer')
-        );
-
-        for (const fileKey of fileKeys) {
-          const zipFile = zip.file(fileKey);
-          if (zipFile) {
-            const rawXml = await zipFile.async('text');
-            const processedXml = replacePlaceholdersInXml(rawXml);
-            zip.file(fileKey, processedXml);
-          }
-        }
-
-        const resultBlob = await zip.generateAsync({
-          type: 'blob',
-          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-        });
-        return resultBlob;
+        
+        return await this.processDocxTemplate(activeTemplateContent, replacements);
       } catch (err) {
         console.warn('Failed to parse uploaded word template content, falling back to built-in template:', err);
       }

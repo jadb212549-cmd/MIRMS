@@ -9,9 +9,45 @@
     <meta property="og:description" content="Material Inspection & Reference Management System - Specimen catalog, quality specifications, and Word DOCX registry." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <style>
+      /* Fallback inline styles for initial load or JS crash on older PCs */
+      .fallback-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        background-color: #0a0a0a;
+        color: #e5e7eb;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        text-align: center;
+        padding: 2rem;
+      }
+      .fallback-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #333;
+        border-top: 3px solid #3b82f6;
+        border-radius: 50%;
+        animation: fallback-spin 1s linear infinite;
+        margin-bottom: 20px;
+      }
+      @keyframes fallback-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <noscript>
+      <div class="fallback-container">
+        <h2>JavaScript Required</h2>
+        <p style="color: #9ca3af; margin-top: 10px;">Please enable JavaScript or update your browser to use the offline environment.</p>
+      </div>
+    </noscript>
+    <div id="root">
+      <div class="fallback-container" id="initial-fallback">
+        <div class="fallback-spinner"></div>
+        <h2>Loading Environment...</h2>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

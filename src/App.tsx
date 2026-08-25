@@ -11,6 +11,7 @@ import { AdminDashboardView } from './components/AdminDashboardView';
 import { MasterItemModal } from './components/MasterItemModal';
 import { ReferenceRegistrationModal } from './components/ReferenceRegistrationModal';
 import { ReferenceDetailModal } from './components/ReferenceDetailModal';
+import { RevisionHistoryView } from './components/RevisionHistoryView';
 import { Bell, RefreshCw, X, Radio } from 'lucide-react';
 
 interface ToastNotification {
@@ -400,6 +401,16 @@ export default function App() {
             onOpenDetailModal={openDetailModal}
             globalSearchQuery={globalSearchQuery}
             onSearchChange={setGlobalSearchQuery}
+          />
+        )}
+
+        {currentTab === 'REVISION_HISTORY' && (
+          <RevisionHistoryView
+            registrations={registrations}
+            masterItems={masterItems}
+            config={config}
+            onRefreshData={refreshAllData}
+            onOpenDetailModal={openDetailModal}
           />
         )}
 

@@ -92,6 +92,7 @@ export interface ReferenceRevisionRecord {
   registrationDate: string;
   registeredBy: string; // Original registrant or revision author
   supplier?: string;
+  lotReference?: string; // e.g. 26-019 MAG
   specification?: string;
   remarks?: string;
   customFields: Record<string, string | number | boolean>;
@@ -134,6 +135,7 @@ export interface ReferenceRegistration {
   registrationDate: string;
   registeredBy: string;
   supplier?: string;
+  lotReference?: string; // e.g. 26-019 MAG
   specification?: string;
   remarks?: string;
   revision: string; // Active official revision e.g. "Rev 01", "Rev 02"
@@ -329,6 +331,7 @@ export type NavigationTab =
   | 'DASHBOARD'
   | 'MASTER_ITEMS'
   | 'REGISTRATIONS'
+  | 'REVISION_HISTORY'
   | 'ADMIN_DASHBOARD'
   | 'FORM_TEMPLATES'
   | 'EXCEL_MANAGER'

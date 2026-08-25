@@ -11,8 +11,9 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-// Configure pdf.js worker URL
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+// Configure pdf.js worker URL (local import to support offline environments)
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 interface PdfViewerProps {
   base64?: string;

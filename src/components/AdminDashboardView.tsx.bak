@@ -43,7 +43,8 @@ import {
   Sparkles,
   LayoutTemplate,
   Printer,
-  EyeOff
+  EyeOff,
+  RefreshCw
 } from 'lucide-react';
 import { realtimeSync } from '../services/realtimeSync';
 import { tauriBridge } from '../services/tauriService';
@@ -53,6 +54,7 @@ import { excelService } from '../services/excelService';
 import { DEFAULT_CATEGORIES } from '../services/defaultData';
 import { CustomFieldsManagerModal } from './CustomFieldsManagerModal';
 import { ExcelManagerView } from './ExcelManagerView';
+import { WordTemplateView } from './WordTemplateView';
 import { FormTemplateManagementView } from './FormTemplateManagementView';
 import { AuditTrailView } from './AuditTrailView';
 import { RevisionApprovalQueueView } from './RevisionApprovalQueueView';

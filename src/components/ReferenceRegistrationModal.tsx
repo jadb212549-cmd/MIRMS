@@ -34,7 +34,8 @@ import {
   ChevronDown, 
   Calendar, 
   Boxes,
-  Clock
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 import { tauriBridge } from '../services/tauriService';
 import { userService } from '../services/userService';
@@ -74,13 +75,14 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
 }) => {
   const [selectedProductCode, setSelectedProductCode] = useState('');
   const [materialType, setMaterialType] = useState<MaterialType>('RM');
-  const [category, setCategory] = useState<string>('Box');
+  const [category, setCategory] = useState<string>('');
   const [categoriesList, setCategoriesList] = useState<string[]>([]);
   const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [customCategoryName, setCustomCategoryName] = useState('');
   const [registrationDate, setRegistrationDate] = useState('');
   const [registeredBy, setRegisteredBy] = useState('');
   const [supplier, setSupplier] = useState('');
+  const [lotReference, setLotReference] = useState('');
   const [specification, setSpecification] = useState('');
   const [remarks, setRemarks] = useState('');
   const [revision, setRevision] = useState('Rev 01');
@@ -92,6 +94,8 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showDuplicatePop, setShowDuplicatePop] = useState(false);
+  const [duplicateCode, setDuplicateCode] = useState('');
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -162,7 +166,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     if (existingRegistration) {
       setSelectedProductCode(existingRegistration.productCode);
       setMaterialType(existingRegistration.materialType || 'RM');
-      setCategory(existingRegistration.category || 'Box');
+      setCategory(existingRegistration.category || '');
       setIsCustomCategory(false);
       setCustomCategoryName('');
       setRegistrationDate(existingRegistration.registrationDate);
@@ -174,6 +178,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
       setRegisteredBy(matchingUser ? matchingUser.shortName : existingRegistration.registeredBy);
 
       setSupplier(existingRegistration.supplier || '');
+      setLotReference(existingRegistration.lotReference || '');
       setSpecification(existingRegistration.specification || '');
       setRemarks(existingRegistration.remarks || '');
       // If existing registration is already approved, editing will submit a new revision (e.g. Rev 02).
@@ -196,7 +201,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     } else if (initialMasterItem) {
       setSelectedProductCode(initialMasterItem.productCode);
       setMaterialType(initialMasterItem.materialType || 'RM');
-      setCategory(initialMasterItem.category || 'Box');
+      setCategory(initialMasterItem.category || '');
       setIsCustomCategory(false);
       setCustomCategoryName('');
       setRegistrationDate(new Date().toISOString().split('T')[0]);
@@ -220,7 +225,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     } else {
       setSelectedProductCode(''); // Blank on reference registry
       setMaterialType('RM');
-      setCategory('Box');
+      setCategory('');
       setIsCustomCategory(false);
       setCustomCategoryName('');
       setRegistrationDate(new Date().toISOString().split('T')[0]);
@@ -241,7 +246,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
   const handleSelectMasterItem = (item: MasterItem) => {
     setSelectedProductCode(item.productCode);
     if (item.materialType) setMaterialType(item.materialType);
-    if (item.category) {
+    if (item.category !== undefined) {
       setCategory(item.category);
       setIsCustomCategory(false);
     }
@@ -259,7 +264,7 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
       if (currentMasterItem.materialType) {
         setMaterialType(currentMasterItem.materialType);
       }
-      if (currentMasterItem.category) {
+      if (currentMasterItem.category !== undefined) {
         setCategory(currentMasterItem.category);
         setIsCustomCategory(false);
       }
@@ -383,7 +388,8 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     );
 
     if (isDuplicate) {
-      setError(`Product Code "${selectedProductCode.trim()}" is already registered. Please edit the existing registration or select a different item.`);
+      setDuplicateCode(selectedProductCode.trim());
+      setShowDuplicatePop(true);
       return;
     }
 
@@ -393,6 +399,11 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     // Selected print photo IDs
     const selectedPrintPhotoIds = photos.filter(p => p.includeInPrint).map(p => p.id);
     const finalCategory = isCustomCategory ? customCategoryName.trim() : category.trim();
+    if (!finalCategory) {
+      setError('Category is required. Please select an existing category or enter a new custom category.');
+      setIsSubmitting(false);
+      return;
+    }
 
     const currentUser = userService.getCurrentUser();
     const isAdmin = currentUser?.role === 'admin';
@@ -402,10 +413,11 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
       masterItemId: currentMasterItem?.id || '',
       productCode: selectedProductCode.trim(),
       materialType,
-      category: finalCategory || 'Box',
+      category: finalCategory,
       registrationDate: registrationDate || new Date().toISOString().split('T')[0],
       registeredBy: registeredBy.trim(),
       supplier: supplier.trim() || undefined,
+      lotReference: lotReference.trim() || undefined,
       specification: specification.trim() || undefined,
       remarks: remarks.trim() || undefined,
       revision: revision.trim() || 'Rev 01',
@@ -423,7 +435,13 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
     if (res.success) {
       onClose();
     } else {
-      setError(res.error || 'Failed to save reference registration.');
+      const errStr = res.error || '';
+      if (errStr.toLowerCase().includes('already registered') || errStr.toLowerCase().includes('already exists') || errStr.toLowerCase().includes('duplicate')) {
+        setDuplicateCode(selectedProductCode.trim());
+        setShowDuplicatePop(true);
+      } else {
+        setError(res.error || 'Failed to save reference registration.');
+      }
     }
   };
 
@@ -617,36 +635,97 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
 
               <div>
                 <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono flex items-center justify-between">
-                  <span>Category</span>
-                  <span className="text-[10px] font-normal text-gray-400 flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-gray-500" />
-                    Auto-filled / Locked
-                  </span>
+                  <span>Category <span className="text-red-400">*</span></span>
+                  {!(currentMasterItem && currentMasterItem.category && currentMasterItem.category.trim() !== '') ? (
+                    !isCustomCategory ? (
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomCategory(true)}
+                        className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 font-sans font-medium cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" /> Add New Category
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomCategory(false)}
+                        className="text-[10px] text-gray-400 hover:text-gray-300 font-sans cursor-pointer"
+                      >
+                        Choose from List
+                      </button>
+                    )
+                  ) : (
+                    <span className="text-[10px] font-normal text-gray-400 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-gray-500" />
+                      Locked to Master
+                    </span>
+                  )}
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    readOnly
-                    tabIndex={-1}
-                    value={category || 'Box'}
-                    className="w-full text-xs pl-3 pr-20 py-2 bg-[#141414] border border-[#333] text-blue-300 font-mono font-medium rounded-lg focus:outline-hidden cursor-not-allowed select-all opacity-95"
-                  />
-                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded bg-[#202020] border border-[#333] text-[10px] text-gray-400 font-mono pointer-events-none">
-                    <Lock className="w-2.5 h-2.5 text-gray-400" />
-                    <span>Master</span>
+
+                {currentMasterItem && currentMasterItem.category && currentMasterItem.category.trim() !== '' ? (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      readOnly
+                      tabIndex={-1}
+                      value={category}
+                      className="w-full text-xs pl-3 pr-20 py-2 bg-[#141414] border border-[#333] text-blue-300 font-mono font-medium rounded-lg focus:outline-hidden cursor-not-allowed select-all opacity-95"
+                    />
+                    <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1 px-2 py-0.5 rounded bg-[#202020] border border-[#333] text-[10px] text-gray-400 font-mono pointer-events-none">
+                      <Lock className="w-2.5 h-2.5 text-gray-400" />
+                      <span>Master</span>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <>
+                    {!isCustomCategory ? (
+                      <select
+                        value={category}
+                        onChange={(e) => {
+                          if (e.target.value === '__NEW__') {
+                            setIsCustomCategory(true);
+                          } else {
+                            setCategory(e.target.value);
+                          }
+                        }}
+                        className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-medium cursor-pointer"
+                      >
+                        <option value="" className="bg-[#1A1A1A] text-gray-500">-- Select Category --</option>
+                        {categoriesList.map((cat) => (
+                          <option key={cat} value={cat} className="bg-[#1A1A1A] text-gray-200">
+                            {cat}
+                          </option>
+                        ))}
+                        {!categoriesList.includes(category) && category && (
+                          <option value={category} className="bg-[#1A1A1A] text-gray-200">{category}</option>
+                        )}
+                        <option value="__NEW__" className="bg-[#1A1A1A] text-blue-400">+ Add New Category...</option>
+                      </select>
+                    ) : (
+                      <div className="flex gap-2 animate-in slide-in-from-top-1 duration-150">
+                        <input
+                          type="text"
+                          placeholder="Enter new category..."
+                          value={customCategoryName}
+                          onChange={(e) => setCustomCategoryName(e.target.value)}
+                          className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-blue-500/50 text-gray-100 rounded-lg focus:outline-hidden focus:border-blue-400"
+                          autoFocus
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 
             {currentMasterItem && (
-              <div className="text-xs bg-[#1A1A1A] p-2.5 rounded-lg border border-[#2A2A2A] text-gray-300 flex items-center justify-between animate-in fade-in duration-150">
+              <div className="text-xs bg-[#1A1A1A] p-2.5 rounded-lg border border-[#2A2A2A] text-gray-300 flex items-center justify-between animate-in fade-in duration-150 font-sans">
                 <div>
                   <span className="font-medium text-gray-200">{currentMasterItem.description}</span>
                   <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-400 font-mono">
                     <span>Type: <strong className="text-gray-300">{currentMasterItem.materialType || 'RM'}</strong></span>
                     <span>•</span>
-                    <span>Category: <strong className="text-gray-300">{currentMasterItem.category || 'Box'}</strong></span>
+                    <span>Category: <strong className={currentMasterItem.category ? "text-gray-300" : "text-red-400 font-bold"}>{currentMasterItem.category || 'MISSING (Please fill)'}</strong></span>
                     <span>•</span>
                     <span>Status: <strong className="text-gray-300">{currentMasterItem.status}</strong></span>
                     {currentMasterItem.unit && (
@@ -722,18 +801,32 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
             </div>
           </div>
 
-          {/* Supplier / Manufacturer Source */}
-          <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono">
-              Supplier / Manufacturer Source
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Apex Metal Alloys Corp. / Lot #2026-08"
-              value={supplier}
-              onChange={(e) => setSupplier(e.target.value)}
-              className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500"
-            />
+          {/* Supplier and Lot Reference Row */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono">
+                Supplier / Manufacturer Source
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Apex Metal Alloys Corp."
+                value={supplier}
+                onChange={(e) => setSupplier(e.target.value)}
+                className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider mb-1 font-mono">
+                Lot Reference
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. 26-019 MAG"
+                value={lotReference}
+                onChange={(e) => setLotReference(e.target.value)}
+                className="w-full text-xs px-3 py-2 bg-[#1A1A1A] border border-[#333] text-gray-200 rounded-lg focus:outline-hidden focus:border-blue-500 font-mono"
+              />
+            </div>
           </div>
 
           {/* Technical Specifications */}
@@ -1037,6 +1130,32 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
           </div>
         </form>
       </div>
+
+      {showDuplicatePop && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#1C1C1C] rounded-xl border border-red-500/40 shadow-2xl p-6 max-w-sm w-full text-center space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="mx-auto w-12 h-12 bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center text-red-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1">
+              <h4 className="text-sm font-bold text-gray-100">Duplicate Item Code Detected</h4>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                The product code <span className="font-mono font-bold text-red-400">"{duplicateCode}"</span> is already registered in the system.
+              </p>
+            </div>
+            <p className="text-xs text-gray-500 bg-[#121212] p-2.5 rounded-lg border border-[#222]">
+              Each sample registration must have a completely unique code to ensure quality trace records and avoid compliance discrepancies.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowDuplicatePop(false)}
+              className="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+            >
+              OK, I Understand
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

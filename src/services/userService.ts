@@ -14,9 +14,12 @@ export interface AllowedId {
 }
 
 const STORAGE_KEYS = {
-  CURRENT_USER: 'mirms_current_user_v1',
   REGISTERED_USERS: 'mirms_registered_users_v1',
   ALLOWED_IDS: 'mirms_allowed_ids_v1',
+};
+
+const SESSION_KEYS = {
+  CURRENT_USER: 'mirms_current_user_v1',
 };
 
 // Initial allowed ID numbers for registration
@@ -76,15 +79,12 @@ class UserService {
       localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
     }
 
-    // Load current logged in user
-    const storedCurrent = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+    // Load current logged in user (from session storage so they are logged out on app close)
+    const storedCurrent = sessionStorage.getItem(SESSION_KEYS.CURRENT_USER);
     if (storedCurrent) {
       this.currentUser = JSON.parse(storedCurrent);
     } else {
-      // Auto-login as Juan Dela Cruz initially for frictionless startup, 
-      // but they can logout or change user at any time.
-      this.currentUser = DEFAULT_USERS[1]; // Juan Dela Cruz
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
+      this.currentUser = null;
     }
   }
 
@@ -189,7 +189,7 @@ class UserService {
 
     // Auto log in after registering
     this.currentUser = newUser;
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
+    sessionStorage.setItem(SESSION_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
 
     this.notifyListeners();
     return { success: true, user: newUser };
@@ -214,7 +214,7 @@ class UserService {
     }
 
     this.currentUser = user;
-    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
+    sessionStorage.setItem(SESSION_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
     this.notifyListeners();
     return { success: true, user };
   }
@@ -222,8 +222,27 @@ class UserService {
   // Log out
   public logout(): void {
     this.currentUser = null;
-    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    sessionStorage.removeItem(SESSION_KEYS.CURRENT_USER);
     this.notifyListeners();
+  }
+
+  // Admin manages registered users
+  public deleteUser(idNumber: string): boolean {
+    const trimmed = idNumber.trim().toUpperCase();
+    const index = this.registeredUsers.findIndex(u => u.idNumber === trimmed);
+    if (index === -1) return false;
+
+    // Prevent deleting the very last admin
+    const userToDelete = this.registeredUsers[index];
+    if (userToDelete.role === 'admin') {
+      const adminCount = this.registeredUsers.filter(u => u.role === 'admin').length;
+      if (adminCount <= 1) return false;
+    }
+
+    this.registeredUsers.splice(index, 1);
+    localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
+    this.notifyListeners();
+    return true;
   }
 }
 

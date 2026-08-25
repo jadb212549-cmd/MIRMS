@@ -563,7 +563,7 @@ class DatabaseService {
       productCode: normalizedCode,
       description: itemData.description.trim(),
       materialType: itemData.materialType || 'RM',
-      category: itemData.category?.trim() || 'Box',
+      category: itemData.category?.trim() || '',
       status: itemData.status,
       unit: itemData.unit?.trim() || undefined,
       createdAt: now,
@@ -723,7 +723,7 @@ class DatabaseService {
       const rawMatType = (row as any).materialType || ((row.category === 'RM' || row.category === 'PS') ? row.category : 'RM');
       const rawCat = (row.category && row.category !== 'RM' && row.category !== 'PS') 
         ? row.category.trim() 
-        : ((row as any).category || (rawMatType === 'PS' ? 'Tape' : 'Box'));
+        : '';
 
       if (rawCat) {
         await this.addCategory(rawCat);
@@ -1029,6 +1029,7 @@ class DatabaseService {
     // Calculate changed fields summary
     const changedFields: string[] = [];
     if (updates.supplier !== undefined && updates.supplier !== current.supplier) changedFields.push('Supplier');
+    if (updates.lotReference !== undefined && updates.lotReference !== current.lotReference) changedFields.push('Lot Reference');
     if (updates.specification !== undefined && updates.specification !== current.specification) changedFields.push('Specification');
     if (updates.remarks !== undefined && updates.remarks !== current.remarks) changedFields.push('Remarks');
     if (updates.category !== undefined && updates.category !== current.category) changedFields.push('Category');
@@ -1063,6 +1064,7 @@ class DatabaseService {
       registrationDate: updates.registrationDate || now.split('T')[0],
       registeredBy: current.registeredBy,
       supplier: updates.supplier !== undefined ? updates.supplier?.trim() : current.supplier,
+      lotReference: updates.lotReference !== undefined ? updates.lotReference?.trim() : current.lotReference,
       specification: updates.specification !== undefined ? updates.specification?.trim() : current.specification,
       remarks: updates.remarks !== undefined ? updates.remarks?.trim() : current.remarks,
       customFields: updates.customFields || { ...current.customFields },
@@ -2480,6 +2482,9 @@ class DatabaseService {
 
   private saveLocalConfig(): void {
     this.safeSetItem(STORAGE_KEYS.APP_CONFIG, JSON.stringify(this.config));
+    if (isTauri()) {
+      this.syncTauri('save_app_config', this.config);
+    }
   }
 
   private saveFormTemplatesLocal(): void {

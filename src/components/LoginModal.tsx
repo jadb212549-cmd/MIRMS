@@ -266,18 +266,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSucce
           )}
         </div>
 
-        {/* Demo Helper Info Footer */}
-        <div className="p-3.5 bg-[#0A0A0A] border-t border-[#222] text-[10px] text-gray-500 font-mono space-y-1">
-          <p className="font-bold uppercase text-gray-400">Default Demo Accounts:</p>
-          <div className="flex justify-between">
-            <span>Admin ID: <strong className="text-blue-400">ADMIN123</strong></span>
-            <span>Password: <strong className="text-gray-300">admin</strong></span>
-          </div>
-          <div className="flex justify-between">
-            <span>User ID: <strong className="text-blue-400">USER123</strong></span>
-            <span>Password: <strong className="text-gray-300">user</strong></span>
-          </div>
-        </div>
       </div>
     </div>
   );

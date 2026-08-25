@@ -107,14 +107,12 @@ export const excelService = {
       }
 
       // 4. Dynamic Category (Box, Tape, Corrugated, Sheet Metal, etc.)
-      let category = 'Box';
+      let category = '';
       const rawCat = catHeader ? String(row[catHeader] || '').trim() : '';
       if (rawCat && rawCat.toUpperCase() !== 'RM' && rawCat.toUpperCase() !== 'PS') {
         category = rawCat;
-      } else if (materialType === 'PS') {
-        category = 'Packaging';
       } else {
-        category = 'Sheet Metal';
+        category = '';
       }
 
       // 5. Status (Active or Inactive)

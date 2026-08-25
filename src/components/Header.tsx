@@ -77,6 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
   const current = currentTab || (activeTab === 'dashboard' ? 'DASHBOARD'
     : activeTab === 'master-items' ? 'MASTER_ITEMS'
     : activeTab === 'registrations' ? 'REGISTRATIONS'
+    : activeTab === 'revision-history' ? 'REVISION_HISTORY'
     : activeTab === 'excel' ? 'EXCEL_MANAGER'
     : activeTab === 'templates' ? 'WORD_TEMPLATES'
     : activeTab === 'data-backup' ? 'DATA_MANAGEMENT'
@@ -90,6 +91,7 @@ export const Header: React.FC<HeaderProps> = ({
       const mapped = tabId === 'DASHBOARD' ? 'dashboard'
         : tabId === 'MASTER_ITEMS' ? 'master-items'
         : tabId === 'REGISTRATIONS' ? 'registrations'
+        : tabId === 'REVISION_HISTORY' ? 'revision-history'
         : tabId === 'EXCEL_MANAGER' ? 'excel'
         : tabId === 'WORD_TEMPLATES' ? 'templates'
         : tabId === 'DATA_MANAGEMENT' ? 'data-backup'
@@ -262,10 +264,21 @@ export const Header: React.FC<HeaderProps> = ({
     return registrations.filter((r) => r.hasPendingRevision || r.status === 'PENDING_APPROVAL').length;
   }, [registrations]);
 
+  const totalRevisionsCount = useMemo(() => {
+    let count = 0;
+    for (const reg of registrations) {
+      if (reg.versions) {
+        count += reg.versions.length;
+      }
+    }
+    return count;
+  }, [registrations]);
+
   const primaryNavItems: { id: NavigationTab; label: string; icon: React.ReactNode; badge?: string | number }[] = [
     { id: 'DASHBOARD', label: 'Dashboard', icon: <Layers className="w-3.5 h-3.5" /> },
     { id: 'MASTER_ITEMS', label: 'Master Items', icon: <Database className="w-3.5 h-3.5" />, badge: totalMaster },
     { id: 'REGISTRATIONS', label: 'Reference Registry', icon: <ShieldCheck className="w-3.5 h-3.5" />, badge: registeredCount },
+    { id: 'REVISION_HISTORY', label: 'Revision History', icon: <History className="w-3.5 h-3.5" />, badge: totalRevisionsCount },
     ...(currentUser?.role === 'admin'
       ? [
           {
