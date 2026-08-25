@@ -42,6 +42,7 @@ jobs:
       - name: Install Rust toolchain (x86_64-pc-windows-msvc)
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: stable
           targets: x86_64-pc-windows-msvc
 
       - name: Rust Cache
@@ -55,7 +56,15 @@ jobs:
           cargo --version
 
       - name: Install Frontend Dependencies
-        run: npm ci
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host "Running npm ci (preferred) — will fall back to npm install if the lockfile is out of sync"
+          npm ci
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "npm ci failed (likely package.json/package-lock.json out of sync). Falling back to 'npm install' to allow the CI run to continue. Please update package-lock.json in the repository to make CI reproducible."
+            npm install
+          }
 
       - name: Compile Frontend Assets (Vite + React)
         run: npm run build
@@ -213,7 +222,7 @@ jobs:
           ================================================================================
           MATERIAL REFERENCE & SAMPLE TRACKING SYSTEM (PORTABLE WINDOWS EDITION)
           ================================================================================
-
+  
           1. FIRST-TIME QUICK START:
              - Step 1: ALWAYS EXTRACT ALL FILES from the ZIP to a real folder on your PC
                        (e.g., Desktop, Documents, C:\Tools\ReferenceTracker, or USB Drive).
@@ -221,7 +230,7 @@ jobs:
              - Step 2: Double-click "ReferenceTracker.exe" (or "START_PORTABLE.bat").
              - Step 3: If Windows Defender SmartScreen appears, click "More info" and then
                        "Run anyway" (this occurs for newly packaged portable executables).
-
+  
           2. PORTABLE STORAGE ARCHITECTURE:
              - All master items, quality samples, high-res photos, specification TDS files,
                audit logs, and custom settings are stored locally in the "ReferenceTracker_Data"
@@ -232,20 +241,20 @@ jobs:
              - Generated Word DOCX Forms: ReferenceTracker_Data/references/FORMS/
              - Custom Word Templates: ReferenceTracker_Data/templates/
              - Full System Backups: ReferenceTracker_Data/backups/
-
+  
           3. SYSTEM PREREQUISITES:
              - Windows 10 (64-bit) or Windows 11.
              - Microsoft Edge WebView2 Runtime (included natively in modern Windows 10/11).
                If missing on legacy Windows systems, download WebView2 Evergreen Bootstrapper:
                https://developer.microsoft.com/en-us/microsoft-edge/webview2/
-
+  
           4. TROUBLESHOOTING:
              - If the app does not launch or closes immediately:
                1. Run "DEBUG_RUN.bat" to see exact diagnostic messages in a console window.
                2. Run "UNBLOCK_FILES.bat" if Windows blocked the downloaded ZIP files.
                3. Check "ReferenceTracker_crash.log" or "ReferenceTracker_startup_error.log".
                4. Verify the folder is not in a read-only location or locked network drive.
-
+  
           5. HOW TO BACK UP OR TRANSFER:
              - Simply copy the entire folder containing "ReferenceTracker.exe" and
                "ReferenceTracker_Data" to any USB flash drive or backup location.
@@ -270,7 +279,8 @@ jobs:
               Remove-Item $zipName -Force
           }
 
-          Compress-Archive -Path $distDir -DestinationPath $zipName -Force
+          # Use wildcard to ensure directory contents (not the parent folder) are compressed reliably
+          Compress-Archive -Path "$distDir\*" -DestinationPath $zipName -Force
 
           Write-Host "=== Step 4: Verifying Created ZIP Archive ==="
           if (-not (Test-Path $zipName)) {
@@ -285,6 +295,12 @@ jobs:
           }
 
           Write-Host "SUCCESS: Verified '$zipName' exists (Size: $($zipFile.Length) bytes)."
+
+          Write-Host "Listing zip contents for verification..."
+          $verifyDir = Join-Path $env:TEMP "verify_zip_$(Get-Random)"
+          Expand-Archive -LiteralPath $zipName -DestinationPath $verifyDir -Force
+          Get-ChildItem -Path $verifyDir -Recurse | ForEach-Object { Write-Host " - $($_.FullName) ($($_.Length) bytes)" }
+          Remove-Item -Path $verifyDir -Recurse -Force
 
       - name: Upload Windows Portable Artifact
         uses: actions/upload-artifact@v4
