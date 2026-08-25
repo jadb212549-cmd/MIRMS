@@ -42,7 +42,7 @@
     "@types/pdfjs-dist": "^2.10.378",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-legacy": "^8.2.3",
+    "@vitejs/plugin-legacy": "^6.1.1",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
