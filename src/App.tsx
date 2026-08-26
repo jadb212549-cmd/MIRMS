@@ -70,22 +70,6 @@ export default function App() {
   // Load state from SQLite / persistent service
   const refreshAllData = useCallback(async () => {
     try {
-      // Trigger daily automatic backup once on app open if not yet executed today
-      const autoBackupResult = await db.checkAndPerformDailyAutoBackup();
-      if (autoBackupResult.performed) {
-        const backupToast: ToastNotification = {
-          id: `toast-autobackup-${Date.now()}`,
-          senderName: 'Daily Auto-Backup',
-          senderColor: '#10B981',
-          summary: `Automatic daily snapshot created for ${autoBackupResult.date} (${autoBackupResult.masterItemsCount} master items, ${autoBackupResult.registrationsCount} registrations)`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        };
-        setToasts((prev) => [backupToast, ...prev.slice(0, 4)]);
-        setTimeout(() => {
-          setToasts((current) => current.filter((t) => t.id !== backupToast.id));
-        }, 8000);
-      }
-
       const [items, regs, logs, cfg] = await Promise.all([
         db.getMasterItems(),
         db.getRegistrations(),
@@ -101,10 +85,43 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
+
+    // Trigger daily automatic backup asynchronously in background (non-blocking)
+    try {
+      db.checkAndPerformDailyAutoBackup().then((autoBackupResult) => {
+        if (autoBackupResult && autoBackupResult.performed) {
+          const backupToast: ToastNotification = {
+            id: `toast-autobackup-${Date.now()}`,
+            senderName: 'Daily Auto-Backup',
+            senderColor: '#10B981',
+            summary: `Automatic daily snapshot created for ${autoBackupResult.date} (${autoBackupResult.masterItemsCount} master items, ${autoBackupResult.registrationsCount} registrations)`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setToasts((prev) => [backupToast, ...prev.slice(0, 4)]);
+          setTimeout(() => {
+            setToasts((current) => current.filter((t) => t.id !== backupToast.id));
+          }, 8000);
+        }
+      }).catch((err) => {
+        console.warn('Background auto-backup check failed:', err);
+      });
+    } catch (bgErr) {
+      console.warn('Background auto-backup trigger error:', bgErr);
+    }
   }, []);
 
   useEffect(() => {
-    refreshAllData();
+    // Safety timer to prevent infinite loading state under any circumstance
+    const safetyTimer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+
+    refreshAllData().finally(() => {
+      clearTimeout(safetyTimer);
+      setIsLoading(false);
+    });
+
+    return () => clearTimeout(safetyTimer);
   }, [refreshAllData]);
 
   // Sync active tab to peers

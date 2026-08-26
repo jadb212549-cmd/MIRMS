@@ -3,6 +3,7 @@ import { INITIAL_MASTER_ITEMS, INITIAL_REGISTRATIONS, INITIAL_AUDIT_LOGS, DEFAUL
 import { INITIAL_FORM_TEMPLATES } from './templateDefaults';
 import { isTauri, tauriBridge } from './tauriService';
 import { realtimeSync } from './realtimeSync';
+import { safeLocalStorage } from './safeStorage';
 import JSZip from 'jszip';
 
 const STORAGE_KEYS = {
@@ -21,18 +22,54 @@ const IDB_STORE_SNAPSHOTS = 'snapshots';
 
 function openSnapshotDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') {
+    if (typeof window === 'undefined' || typeof indexedDB === 'undefined') {
       return reject(new Error('IndexedDB not supported in this environment'));
     }
-    const request = indexedDB.open(IDB_NAME, IDB_VERSION);
-    request.onupgradeneeded = () => {
-      const idb = request.result;
-      if (!idb.objectStoreNames.contains(IDB_STORE_SNAPSHOTS)) {
-        idb.createObjectStore(IDB_STORE_SNAPSHOTS, { keyPath: 'id' });
+
+    let finished = false;
+    const timeoutTimer = setTimeout(() => {
+      if (!finished) {
+        finished = true;
+        reject(new Error('IndexedDB connection timeout'));
       }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    }, 2000);
+
+    try {
+      const request = indexedDB.open(IDB_NAME, IDB_VERSION);
+      request.onupgradeneeded = () => {
+        const idb = request.result;
+        if (!idb.objectStoreNames.contains(IDB_STORE_SNAPSHOTS)) {
+          idb.createObjectStore(IDB_STORE_SNAPSHOTS, { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => {
+        if (!finished) {
+          finished = true;
+          clearTimeout(timeoutTimer);
+          resolve(request.result);
+        }
+      };
+      request.onerror = () => {
+        if (!finished) {
+          finished = true;
+          clearTimeout(timeoutTimer);
+          reject(request.error || new Error('IndexedDB failed to open'));
+        }
+      };
+      request.onblocked = () => {
+        if (!finished) {
+          finished = true;
+          clearTimeout(timeoutTimer);
+          reject(new Error('IndexedDB open blocked'));
+        }
+      };
+    } catch (err) {
+      if (!finished) {
+        finished = true;
+        clearTimeout(timeoutTimer);
+        reject(err);
+      }
+    }
   });
 }
 
@@ -133,11 +170,11 @@ class DatabaseService {
 
   public async reloadFromDisk(): Promise<void> {
     try {
-      const storedItems = localStorage.getItem(STORAGE_KEYS.MASTER_ITEMS);
-      const storedRefs = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
-      const storedAudits = localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
-      const storedConfig = localStorage.getItem(STORAGE_KEYS.APP_CONFIG);
-      const storedTemplates = localStorage.getItem(STORAGE_KEYS.FORM_TEMPLATES);
+      const storedItems = safeLocalStorage.getItem(STORAGE_KEYS.MASTER_ITEMS);
+      const storedRefs = safeLocalStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
+      const storedAudits = safeLocalStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
+      const storedConfig = safeLocalStorage.getItem(STORAGE_KEYS.APP_CONFIG);
+      const storedTemplates = safeLocalStorage.getItem(STORAGE_KEYS.FORM_TEMPLATES);
 
       if (storedItems) this.masterItems = JSON.parse(storedItems);
       if (storedRefs) this.registrations = JSON.parse(storedRefs);
@@ -177,7 +214,7 @@ class DatabaseService {
             this.config = data.config || DEFAULT_CONFIG;
 
             // Load templates from persistent local store in Tauri environment
-            const storedTemplates = localStorage.getItem(STORAGE_KEYS.FORM_TEMPLATES);
+            const storedTemplates = safeLocalStorage.getItem(STORAGE_KEYS.FORM_TEMPLATES);
             if (storedTemplates) {
               try {
                 const parsedTemplates = JSON.parse(storedTemplates);
@@ -206,11 +243,11 @@ class DatabaseService {
       }
 
       // Load from persistent local store
-      const storedItems = localStorage.getItem(STORAGE_KEYS.MASTER_ITEMS);
-      const storedRefs = localStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
-      const storedAudits = localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
-      const storedConfig = localStorage.getItem(STORAGE_KEYS.APP_CONFIG);
-      const storedTemplates = localStorage.getItem(STORAGE_KEYS.FORM_TEMPLATES);
+      const storedItems = safeLocalStorage.getItem(STORAGE_KEYS.MASTER_ITEMS);
+      const storedRefs = safeLocalStorage.getItem(STORAGE_KEYS.REGISTRATIONS);
+      const storedAudits = safeLocalStorage.getItem(STORAGE_KEYS.AUDIT_LOGS);
+      const storedConfig = safeLocalStorage.getItem(STORAGE_KEYS.APP_CONFIG);
+      const storedTemplates = safeLocalStorage.getItem(STORAGE_KEYS.FORM_TEMPLATES);
 
       if (storedItems) {
         const parsed = JSON.parse(storedItems);
@@ -2106,7 +2143,7 @@ class DatabaseService {
 
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const lastBackupDate = localStorage.getItem(STORAGE_KEYS.LAST_AUTO_BACKUP_DATE) || this.config.lastAutoBackupDate;
+    const lastBackupDate = safeLocalStorage.getItem(STORAGE_KEYS.LAST_AUTO_BACKUP_DATE) || this.config.lastAutoBackupDate;
 
     if (lastBackupDate === todayStr) {
       return {
@@ -2159,7 +2196,7 @@ class DatabaseService {
       // Clean old snapshots in IndexedDB that are no longer in rolling 14-day window
       await idbDeleteOldSnapshots(updatedList.map((b) => b.id));
 
-      // Save lightweight metadata array to localStorage (<1KB, safe against quota)
+      // Save lightweight metadata array to storage (<1KB, safe against quota)
       this.safeSetItem(STORAGE_KEYS.DAILY_BACKUPS, JSON.stringify(updatedList));
 
       // Mark today as backed up
@@ -2218,7 +2255,7 @@ class DatabaseService {
     dataSizeEstimate: string;
   }> {
     try {
-      const raw = localStorage.getItem(STORAGE_KEYS.DAILY_BACKUPS);
+      const raw = safeLocalStorage.getItem(STORAGE_KEYS.DAILY_BACKUPS);
       if (!raw) return [];
       const list = JSON.parse(raw);
       if (!Array.isArray(list)) return [];
@@ -2245,9 +2282,9 @@ class DatabaseService {
       // 1. First retrieve full snapshot from IndexedDB
       let snapshot = await idbGetSnapshot(backupId);
 
-      // 2. Fallback to localStorage if older backup was stored there
+      // 2. Fallback to storage if older backup was stored there
       if (!snapshot || !snapshot.data) {
-        const raw = localStorage.getItem(STORAGE_KEYS.DAILY_BACKUPS);
+        const raw = safeLocalStorage.getItem(STORAGE_KEYS.DAILY_BACKUPS);
         if (raw) {
           try {
             const list = JSON.parse(raw);
@@ -2325,7 +2362,7 @@ class DatabaseService {
     try {
       let snapshot = await idbGetSnapshot(backupId);
       if (!snapshot || !snapshot.data) {
-        const raw = localStorage.getItem(STORAGE_KEYS.DAILY_BACKUPS);
+        const raw = safeLocalStorage.getItem(STORAGE_KEYS.DAILY_BACKUPS);
         if (raw) {
           try {
             const list = JSON.parse(raw);
@@ -2381,20 +2418,20 @@ class DatabaseService {
   // Storage pruning and quota management
   private pruneNonEssentialLocalStorage(): void {
     try {
-      // 1. Remove temporary safety snapshots and legacy keys from localStorage
+      // 1. Remove temporary safety snapshots and legacy keys from storage
       const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
+      for (let i = 0; i < safeLocalStorage.length; i++) {
+        const k = safeLocalStorage.key(i);
         if (k && (k.startsWith('mat_ref_safety_') || k.startsWith('mat_ref_temp_'))) {
           keysToRemove.push(k);
         }
       }
       keysToRemove.forEach((k) => {
-        try { localStorage.removeItem(k); } catch {}
+        try { safeLocalStorage.removeItem(k); } catch {}
       });
 
-      // 2. Convert any old bloated DAILY_BACKUPS string in localStorage to lightweight metadata
-      const rawDaily = localStorage.getItem(STORAGE_KEYS.DAILY_BACKUPS);
+      // 2. Convert any old bloated DAILY_BACKUPS string in storage to lightweight metadata
+      const rawDaily = safeLocalStorage.getItem(STORAGE_KEYS.DAILY_BACKUPS);
       if (rawDaily) {
         try {
           const parsed = JSON.parse(rawDaily);
@@ -2418,11 +2455,11 @@ class DatabaseService {
                 }
               });
 
-              localStorage.setItem(STORAGE_KEYS.DAILY_BACKUPS, JSON.stringify(lightweight));
+              safeLocalStorage.setItem(STORAGE_KEYS.DAILY_BACKUPS, JSON.stringify(lightweight));
             }
           }
         } catch {
-          localStorage.removeItem(STORAGE_KEYS.DAILY_BACKUPS);
+          safeLocalStorage.removeItem(STORAGE_KEYS.DAILY_BACKUPS);
         }
       }
 
@@ -2430,38 +2467,20 @@ class DatabaseService {
       if (this.auditLogs.length > 100) {
         this.auditLogs = this.auditLogs.slice(0, 100);
         try {
-          localStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(this.auditLogs));
+          safeLocalStorage.setItem(STORAGE_KEYS.AUDIT_LOGS, JSON.stringify(this.auditLogs));
         } catch {}
       }
     } catch (err) {
-      console.warn('Error during localStorage pruning:', err);
+      console.warn('Error during storage pruning:', err);
     }
   }
 
   private safeSetItem(key: string, value: string): boolean {
     try {
-      localStorage.setItem(key, value);
+      safeLocalStorage.setItem(key, value);
       return true;
     } catch (err: any) {
-      if (
-        err &&
-        (err.name === 'QuotaExceededError' ||
-          err.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-          err.code === 22 ||
-          err.code === 1014 ||
-          err.number === -2147024882)
-      ) {
-        console.warn(`LocalStorage quota exceeded when storing "${key}". Pruning non-essential storage keys and retrying.`);
-        this.pruneNonEssentialLocalStorage();
-        try {
-          localStorage.setItem(key, value);
-          return true;
-        } catch (retryErr) {
-          console.error(`Failed to store "${key}" in localStorage after pruning:`, retryErr);
-          return false;
-        }
-      }
-      console.error(`LocalStorage error when setting "${key}":`, err);
+      console.warn(`Storage set error for key "${key}":`, err);
       return false;
     }
   }

@@ -636,14 +636,13 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                 <th className="py-3 px-3 w-40 font-medium">Category</th>
                 <th className="py-3 px-3 w-20 font-medium">Status</th>
                 <th className="py-3 px-3 w-24 font-medium">Unit</th>
-                <th className="py-3 px-4 w-36 font-medium">Sample Status</th>
                 <th className="py-3 px-4 w-32 font-medium">Date Recorded</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#222]">
               {filteredItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-gray-500">
+                  <td colSpan={7} className="py-12 text-center text-gray-500">
                     <Database className="w-8 h-8 mx-auto text-gray-600 mb-2" />
                     <p className="font-semibold text-gray-300">No master reference items matched your filter criteria.</p>
                     <p className="text-xs text-gray-500 mt-1">Try clearing search, date, or category filters.</p>
@@ -1035,37 +1034,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                         )}
                       </td>
 
-                      {/* 7. Sample Registration Badge */}
-                      <td className="py-3 px-4">
-                        {isRegistered ? (
-                          <div className="flex flex-col items-start gap-1">
-                            <span
-                              onClick={() => onViewReference && onViewReference(reg)}
-                              className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 cursor-pointer hover:bg-green-500/20 transition-colors"
-                              title="Click to view reference details"
-                            >
-                              <ShieldCheck className="w-3 h-3 text-green-400" />
-                              <span>{reg.revision} ({reg.registrationDate})</span>
-                            </span>
-                            {reg.registeredBy && (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-gray-400 font-sans">
-                                <User className="w-2.5 h-2.5 text-cyan-400/80" />
-                                <span>{reg.registeredBy}</span>
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => handleAttemptRegister(item)}
-                            className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20 transition-colors cursor-pointer"
-                            title="Register reference sample for this item"
-                          >
-                            <span>Pending Sample</span>
-                          </button>
-                        )}
-                      </td>
-
-                      {/* 8. Date Recorded */}
+                      {/* 7. Date Recorded */}
                       <td className="py-3 px-4 font-mono text-[11px] text-gray-400">
                         {itemDateStr || <span className="text-gray-600">-</span>}
                       </td>

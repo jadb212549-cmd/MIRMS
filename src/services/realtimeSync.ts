@@ -1,4 +1,5 @@
 import { SyncMessage, WorkstationUser, NavigationTab } from '../types';
+import { safeLocalStorage, safeSessionStorage } from './safeStorage';
 
 const SYNC_CHANNEL_NAME = 'mat_ref_live_sync_channel_v1';
 const USER_SESSION_KEY = 'mat_ref_workstation_user_v1';
@@ -36,7 +37,7 @@ class RealtimeSyncService {
 
   private loadOrCreateUser(): WorkstationUser {
     try {
-      const stored = sessionStorage.getItem(USER_SESSION_KEY) || localStorage.getItem(USER_SESSION_KEY);
+      const stored = safeSessionStorage.getItem(USER_SESSION_KEY) || safeLocalStorage.getItem(USER_SESSION_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
         return {
@@ -59,7 +60,7 @@ class RealtimeSyncService {
     };
 
     try {
-      sessionStorage.setItem(USER_SESSION_KEY, JSON.stringify(newUser));
+      safeSessionStorage.setItem(USER_SESSION_KEY, JSON.stringify(newUser));
     } catch (e) {}
 
     return newUser;
@@ -170,7 +171,7 @@ class RealtimeSyncService {
 
     // Also trigger storage event for legacy/fallback tab synchronization
     try {
-      localStorage.setItem('mat_ref_cross_storage_sync', JSON.stringify(msg));
+      safeLocalStorage.setItem('mat_ref_cross_storage_sync', JSON.stringify(msg));
     } catch (e) {}
   }
 
@@ -198,8 +199,8 @@ class RealtimeSyncService {
     this.currentUser.lastActive = new Date().toISOString();
 
     try {
-      sessionStorage.setItem(USER_SESSION_KEY, JSON.stringify(this.currentUser));
-      localStorage.setItem(USER_SESSION_KEY, JSON.stringify(this.currentUser));
+      safeSessionStorage.setItem(USER_SESSION_KEY, JSON.stringify(this.currentUser));
+      safeLocalStorage.setItem(USER_SESSION_KEY, JSON.stringify(this.currentUser));
     } catch (e) {}
 
     this.broadcast({

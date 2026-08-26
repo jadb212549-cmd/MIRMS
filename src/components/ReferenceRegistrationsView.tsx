@@ -119,25 +119,25 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
       {/* Control & Filter Header */}
       <div className="bg-[#141414] p-4 rounded-xl border border-[#222] space-y-3">
         {/* Top Row: Large Search Bar & Primary Actions */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           {/* Large Expanded Search Field */}
           <div className="relative flex-1">
-            <Search className="w-5 h-5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-5 h-5 sm:w-6 sm:h-6 text-blue-400/80 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="Search registered samples by Product Code, Description, Supplier, Lot, Registered By, or Specification..."
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full pl-11 pr-10 py-3 text-sm bg-[#1A1A1A] border border-[#333] text-gray-100 placeholder-gray-500 rounded-xl focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all shadow-inner"
+              className="w-full pl-12 sm:pl-14 pr-12 py-3.5 sm:py-4 text-sm sm:text-base bg-[#181818] border-2 border-[#333] hover:border-[#444] text-gray-100 placeholder-gray-500 rounded-xl focus:outline-hidden focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all shadow-inner font-medium"
             />
             {searchTerm && (
               <button
                 type="button"
                 onClick={() => handleSearchChange('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-200 hover:bg-[#252525] rounded-md transition-colors cursor-pointer"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-white hover:bg-[#2A2A2A] rounded-lg transition-colors cursor-pointer"
                 title="Clear search"
               >
-                <X className="w-4 h-4" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             )}
           </div>
@@ -147,9 +147,9 @@ export const ReferenceRegistrationsView: React.FC<ReferenceRegistrationsViewProp
             <button
               type="button"
               onClick={onOpenCreateModal}
-              className="flex items-center justify-center gap-2 px-4 py-3 text-xs sm:text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 active:bg-blue-700 rounded-xl shadow-md shadow-blue-600/20 transition-all shrink-0 cursor-pointer"
+              className="flex items-center justify-center gap-2 px-5 py-3.5 sm:py-4 text-xs sm:text-sm font-bold text-white bg-blue-600 hover:bg-blue-500 active:bg-blue-700 rounded-xl shadow-lg shadow-blue-600/20 transition-all shrink-0 cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
               <span>Register Reference Sample</span>
             </button>
           )}

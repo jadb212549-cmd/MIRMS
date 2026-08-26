@@ -45,9 +45,52 @@
     <div id="root">
       <div class="fallback-container" id="initial-fallback">
         <div class="fallback-spinner"></div>
-        <h2>Loading Environment...</h2>
+        <h2 id="fallback-status">Loading Environment...</h2>
+        <p id="fallback-subtext" style="color: #9ca3af; font-size: 13px; margin-top: 8px;">Initializing local workstation engine</p>
+        <div id="fallback-actions" style="display: none; margin-top: 20px; flex-direction: column; align-items: center; gap: 10px;">
+          <p style="color: #f59e0b; font-size: 14px; max-width: 420px; line-height: 1.5;">
+            The application is taking longer than usual to load. If it does not appear shortly, click below to clear local storage cache or force reload:
+          </p>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 6px;">
+            <button onclick="window.location.reload();" style="background:#2563eb;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">
+              Reload Page
+            </button>
+            <button onclick="try{localStorage.clear();sessionStorage.clear();}catch(e){}window.location.reload();" style="background:#374151;color:#f3f4f6;border:1px solid #4b5563;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">
+              Reset Local Cache & Reload
+            </button>
+          </div>
+          <div id="error-diagnostics" style="display: none; margin-top: 15px; background: #1f2937; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 11px; color: #ef4444; max-width: 480px; text-align: left; overflow-x: auto; white-space: pre-wrap;"></div>
+        </div>
       </div>
     </div>
+    <script>
+      (function() {
+        var lastErr = null;
+        window.addEventListener('error', function(e) {
+          lastErr = (e && e.message) ? e.message : 'Unknown script error';
+          var diag = document.getElementById('error-diagnostics');
+          if (diag) {
+            diag.style.display = 'block';
+            diag.textContent = 'Diagnostic Error: ' + lastErr;
+          }
+        });
+        window.addEventListener('unhandledrejection', function(e) {
+          lastErr = (e && e.reason) ? (e.reason.message || String(e.reason)) : 'Unhandled rejection';
+          var diag = document.getElementById('error-diagnostics');
+          if (diag) {
+            diag.style.display = 'block';
+            diag.textContent = 'Diagnostic Error: ' + lastErr;
+          }
+        });
+        setTimeout(function() {
+          var fallback = document.getElementById('initial-fallback');
+          if (fallback && document.getElementById('root') && document.getElementById('root').contains(fallback)) {
+            var actions = document.getElementById('fallback-actions');
+            if (actions) actions.style.display = 'flex';
+          }
+        }, 3500);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

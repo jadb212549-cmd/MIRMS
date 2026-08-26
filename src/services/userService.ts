@@ -1,3 +1,5 @@
+import { safeLocalStorage, safeSessionStorage } from './safeStorage';
+
 export interface AppUser {
   fullName: string;
   shortName: string; // e.g. "JD. Stone"
@@ -61,29 +63,36 @@ class UserService {
   }
 
   private init() {
-    // Load allowed IDs
-    const storedAllowed = localStorage.getItem(STORAGE_KEYS.ALLOWED_IDS);
-    if (storedAllowed) {
-      this.allowedIds = JSON.parse(storedAllowed);
-    } else {
+    try {
+      // Load allowed IDs
+      const storedAllowed = safeLocalStorage.getItem(STORAGE_KEYS.ALLOWED_IDS);
+      if (storedAllowed) {
+        this.allowedIds = JSON.parse(storedAllowed);
+      } else {
+        this.allowedIds = [...DEFAULT_ALLOWED_IDS];
+        safeLocalStorage.setItem(STORAGE_KEYS.ALLOWED_IDS, JSON.stringify(this.allowedIds));
+      }
+
+      // Load registered users
+      const storedUsers = safeLocalStorage.getItem(STORAGE_KEYS.REGISTERED_USERS);
+      if (storedUsers) {
+        this.registeredUsers = JSON.parse(storedUsers);
+      } else {
+        this.registeredUsers = [...DEFAULT_USERS];
+        safeLocalStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
+      }
+
+      // Load current logged in user (from session storage so they are logged out on app close)
+      const storedCurrent = safeSessionStorage.getItem(SESSION_KEYS.CURRENT_USER);
+      if (storedCurrent) {
+        this.currentUser = JSON.parse(storedCurrent);
+      } else {
+        this.currentUser = null;
+      }
+    } catch (e) {
+      console.warn('Failed to initialize users from storage, using defaults:', e);
       this.allowedIds = [...DEFAULT_ALLOWED_IDS];
-      localStorage.setItem(STORAGE_KEYS.ALLOWED_IDS, JSON.stringify(this.allowedIds));
-    }
-
-    // Load registered users
-    const storedUsers = localStorage.getItem(STORAGE_KEYS.REGISTERED_USERS);
-    if (storedUsers) {
-      this.registeredUsers = JSON.parse(storedUsers);
-    } else {
       this.registeredUsers = [...DEFAULT_USERS];
-      localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
-    }
-
-    // Load current logged in user (from session storage so they are logged out on app close)
-    const storedCurrent = sessionStorage.getItem(SESSION_KEYS.CURRENT_USER);
-    if (storedCurrent) {
-      this.currentUser = JSON.parse(storedCurrent);
-    } else {
       this.currentUser = null;
     }
   }
@@ -134,7 +143,7 @@ class UserService {
     }
 
     this.allowedIds.push({ idNumber: trimmed, role, note: note?.trim() });
-    localStorage.setItem(STORAGE_KEYS.ALLOWED_IDS, JSON.stringify(this.allowedIds));
+    safeLocalStorage.setItem(STORAGE_KEYS.ALLOWED_IDS, JSON.stringify(this.allowedIds));
     this.notifyListeners();
     return true;
   }
@@ -145,7 +154,7 @@ class UserService {
     if (index === -1) return false;
 
     this.allowedIds.splice(index, 1);
-    localStorage.setItem(STORAGE_KEYS.ALLOWED_IDS, JSON.stringify(this.allowedIds));
+    safeLocalStorage.setItem(STORAGE_KEYS.ALLOWED_IDS, JSON.stringify(this.allowedIds));
     this.notifyListeners();
     return true;
   }
@@ -185,11 +194,11 @@ class UserService {
     };
 
     this.registeredUsers.push(newUser);
-    localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
+    safeLocalStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
 
     // Auto log in after registering
     this.currentUser = newUser;
-    sessionStorage.setItem(SESSION_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
+    safeSessionStorage.setItem(SESSION_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
 
     this.notifyListeners();
     return { success: true, user: newUser };
@@ -214,7 +223,7 @@ class UserService {
     }
 
     this.currentUser = user;
-    sessionStorage.setItem(SESSION_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
+    safeSessionStorage.setItem(SESSION_KEYS.CURRENT_USER, JSON.stringify(this.currentUser));
     this.notifyListeners();
     return { success: true, user };
   }
@@ -222,7 +231,7 @@ class UserService {
   // Log out
   public logout(): void {
     this.currentUser = null;
-    sessionStorage.removeItem(SESSION_KEYS.CURRENT_USER);
+    safeSessionStorage.removeItem(SESSION_KEYS.CURRENT_USER);
     this.notifyListeners();
   }
 
@@ -240,7 +249,7 @@ class UserService {
     }
 
     this.registeredUsers.splice(index, 1);
-    localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
+    safeLocalStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
     this.notifyListeners();
     return true;
   }
@@ -249,16 +258,16 @@ class UserService {
   public resetToFactory(): void {
     const adminAccount = this.registeredUsers.find(u => u.idNumber === 'ADMIN123') || DEFAULT_USERS.find(u => u.idNumber === 'ADMIN123')!;
     this.registeredUsers = [adminAccount];
-    localStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
+    safeLocalStorage.setItem(STORAGE_KEYS.REGISTERED_USERS, JSON.stringify(this.registeredUsers));
     
     // Reset allowed IDs to defaults
     this.allowedIds = [...DEFAULT_ALLOWED_IDS];
-    localStorage.setItem(STORAGE_KEYS.ALLOWED_IDS, JSON.stringify(this.allowedIds));
+    safeLocalStorage.setItem(STORAGE_KEYS.ALLOWED_IDS, JSON.stringify(this.allowedIds));
     
     // Log out if the current user is not ADMIN123
     if (this.currentUser && this.currentUser.idNumber !== 'ADMIN123') {
       this.currentUser = null;
-      sessionStorage.removeItem(SESSION_KEYS.CURRENT_USER);
+      safeSessionStorage.removeItem(SESSION_KEYS.CURRENT_USER);
     }
     
     this.notifyListeners();
