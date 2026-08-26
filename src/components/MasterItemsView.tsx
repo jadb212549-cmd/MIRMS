@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { MasterItem, ReferenceRegistration, ItemCategory, ItemStatus } from '../types';
-import { Database, Plus, Search, Filter, FileSpreadsheet, ShieldCheck, Calendar, X, Clock, Check, ChevronDown, Sparkles, RefreshCw, Camera, User } from 'lucide-react';
+import { Database, Plus, Search, Filter, FileSpreadsheet, ShieldCheck, Calendar, X, Clock, Check, ChevronDown, Sparkles, RefreshCw, Camera, User, AlertTriangle, AlertCircle, Edit2 } from 'lucide-react';
 import { excelService } from '../services/excelService';
 import { userService } from '../services/userService';
+import { db } from '../services/db';
 
 interface MasterItemsViewProps {
   masterItems: MasterItem[];
@@ -60,11 +61,12 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
     return list.sort((a, b) => a.localeCompare(b));
   }, [registrations]);
 
-  // Material Type, Dynamic Category, Status, Sample Registration filters
+  // Material Type, Dynamic Category, Status, Sample Registration, and Incomplete filters
   const [materialTypeFilter, setMaterialTypeFilter] = useState<'ALL' | 'RM' | 'PS'>('ALL');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | ItemStatus>('ALL');
   const [regFilter, setRegFilter] = useState<'ALL' | 'REGISTERED' | 'UNREGISTERED'>('ALL');
+  const [incompleteOnlyFilter, setIncompleteOnlyFilter] = useState<boolean>(false);
 
   // Distinct categories in master items
   const distinctCategories = useMemo(() => {
@@ -72,11 +74,39 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
     return cats.sort((a, b) => a.localeCompare(b));
   }, [masterItems]);
 
+  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  useEffect(() => {
+    const loadCats = async () => {
+      const cats = await db.getCategories();
+      const combined = Array.from(new Set([...cats, ...distinctCategories])).filter(Boolean);
+      setAvailableCategories(combined.sort((a, b) => a.localeCompare(b)));
+    };
+    loadCats();
+  }, [distinctCategories]);
+
   // Date Filtering State (Targeting Date Recorded)
   const [dateFilterOption, setDateFilterOption] = useState<DateFilterOption>('ALL');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  // Inline Editing States
+  const [inlineEdit, setInlineEdit] = useState<{
+    itemId: string;
+    field: 'category' | 'materialType' | 'unit' | 'description';
+    value: string;
+    customInput?: string;
+    isCustom?: boolean;
+  } | null>(null);
+  const [isSavingInline, setIsSavingInline] = useState(false);
+  const [inlineSaveError, setInlineSaveError] = useState<string | null>(null);
+
+  // Incomplete Item Validation Error Popup Modal State
+  const [incompleteModalInfo, setIncompleteModalInfo] = useState<{
+    isOpen: boolean;
+    item?: MasterItem;
+    missingFields: string[];
+  } | null>(null);
 
   // Map of registrations by productCode
   const regMap = useMemo(() => {
@@ -84,6 +114,20 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
     registrations.forEach((r) => map.set(r.productCode.toLowerCase(), r));
     return map;
   }, [registrations]);
+
+  // Missing fields helper
+  const getMissingFields = (item: MasterItem): string[] => {
+    const missing: string[] = [];
+    if (!item.category || item.category.trim() === '') missing.push('Category');
+    if (!item.materialType || item.materialType.trim() === '') missing.push('Material Type');
+    if (!item.description || item.description.trim() === '') missing.push('Description');
+    return missing;
+  };
+
+  // Total incomplete items count
+  const incompleteItemsCount = useMemo(() => {
+    return masterItems.filter((item) => !item.category || item.category.trim() === '' || !item.materialType || !item.description).length;
+  }, [masterItems]);
 
   // Date calculation boundaries
   const { todayStr, yesterdayStr, past7DaysStr, past30DaysStr } = useMemo(() => {
@@ -127,7 +171,14 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
         searchTerm === '' ||
         item.productCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.unit && item.unit.toLowerCase().includes(searchTerm.toLowerCase()));
+        (item.unit && item.unit.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase()));
+
+      // 2. Incomplete Only Filter
+      const isMissing = !item.category || item.category.trim() === '' || !item.materialType || !item.description;
+      if (incompleteOnlyFilter && !isMissing) {
+        return false;
+      }
 
       // 3. Material Type Filter
       const matMatch = materialTypeFilter === 'ALL' || (item.materialType || (item.category === 'RM' || item.category === 'PS' ? item.category : 'RM')) === materialTypeFilter;
@@ -175,6 +226,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
   }, [
     masterItems,
     searchTerm,
+    incompleteOnlyFilter,
     registeredByFilter,
     materialTypeFilter,
     categoryFilter,
@@ -192,6 +244,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
 
   const hasActiveFilters =
     searchTerm !== '' ||
+    incompleteOnlyFilter ||
     registeredByFilter !== 'ALL' ||
     materialTypeFilter !== 'ALL' ||
     categoryFilter !== 'ALL' ||
@@ -203,6 +256,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
 
   const resetAllFilters = () => {
     handleSearchChange('');
+    setIncompleteOnlyFilter(false);
     setRegisteredByFilter('ALL');
     setMaterialTypeFilter('ALL');
     setCategoryFilter('ALL');
@@ -211,6 +265,68 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
     setDateFilterOption('ALL');
     setCustomStartDate('');
     setCustomEndDate('');
+  };
+
+  // Inline Save Handler
+  const handleSaveInline = async (item: MasterItem) => {
+    if (!inlineEdit || inlineEdit.itemId !== item.id) return;
+    setIsSavingInline(true);
+    setInlineSaveError(null);
+
+    let finalValue = inlineEdit.value;
+    if (inlineEdit.field === 'category') {
+      if (inlineEdit.isCustom || inlineEdit.value === '__NEW__') {
+        finalValue = (inlineEdit.customInput || '').trim();
+      } else {
+        finalValue = (inlineEdit.value || '').trim();
+      }
+      if (!finalValue) {
+        setInlineSaveError('Category cannot be empty.');
+        setIsSavingInline(false);
+        return;
+      }
+    } else {
+      finalValue = finalValue.trim();
+    }
+
+    try {
+      const updates: Partial<MasterItem> = {
+        [inlineEdit.field]: finalValue
+      };
+      const res = await db.updateMasterItem(
+        item.id,
+        updates,
+        currentUser?.fullName || currentUser?.shortName || 'Admin'
+      );
+      if (res && res.success === false) {
+        setInlineSaveError(res.error || 'Failed to update item.');
+      } else {
+        setInlineEdit(null);
+        if (inlineEdit.field === 'category' && finalValue) {
+          setAvailableCategories((prev) => Array.from(new Set([...prev, finalValue])).sort());
+        }
+      }
+    } catch (err: any) {
+      setInlineSaveError(err.message || 'Error updating item.');
+    } finally {
+      setIsSavingInline(false);
+    }
+  };
+
+  // Safe registration attempt check
+  const handleAttemptRegister = (item: MasterItem) => {
+    const missing = getMissingFields(item);
+    if (missing.length > 0) {
+      setIncompleteModalInfo({
+        isOpen: true,
+        item,
+        missingFields: missing
+      });
+      return;
+    }
+    if (onRegisterReference) {
+      onRegisterReference(item);
+    }
   };
 
   return (
@@ -224,7 +340,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
             <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search code, description, unit..."
+              placeholder="Search code, description, category, unit..."
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-9 pr-8 py-2 text-xs bg-[#1A1A1A] border border-[#333] text-gray-200 placeholder-gray-500 rounded-lg focus:outline-hidden focus:border-blue-500 transition-colors"
@@ -239,8 +355,23 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
             )}
           </div>
 
-          {/* Actions: Add New Item & Export */}
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Actions: Add New Item, Missing Filter Toggle & Export */}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {incompleteItemsCount > 0 && (
+              <button
+                onClick={() => setIncompleteOnlyFilter(!incompleteOnlyFilter)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                  incompleteOnlyFilter
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 ring-2 ring-amber-500/30'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/15'
+                }`}
+                title="Filter items missing required details (e.g. Category)"
+              >
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                <span>Missing Fields ({incompleteItemsCount})</span>
+              </button>
+            )}
+
             <button
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border transition-colors ${
@@ -339,7 +470,7 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
               </select>
             </div>
 
-            {/* Registered By Filter (Requested Feature: Filter by Registered By) */}
+            {/* Registered By Filter */}
             <div className="flex items-center gap-1.5 bg-[#1A1A1A] border border-[#333] px-2.5 py-1.5 rounded-lg text-xs">
               <User className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
               <span className="text-gray-400 font-medium">Reg By:</span>
@@ -356,59 +487,46 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                 ))}
               </select>
             </div>
+          </div>
 
-            {/* Date Quick Presets (Requested Feature) */}
-            <div className="flex items-center bg-[#181818] p-0.5 rounded-lg border border-[#333] text-xs">
+          {/* Quick Date Presets & Clear Filters */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-gray-500 font-mono hidden sm:inline mr-1">Date:</span>
+            <div className="flex items-center bg-[#1A1A1A] p-0.5 rounded-lg border border-[#333]">
               <button
                 onClick={() => setDateFilterOption('ALL')}
                 className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                  dateFilterOption === 'ALL'
-                    ? 'bg-[#2A2A2A] text-white shadow-xs'
-                    : 'text-gray-400 hover:text-gray-200'
+                  dateFilterOption === 'ALL' ? 'bg-[#2A2A2A] text-blue-400' : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
-                All Dates
+                All
               </button>
               <button
                 onClick={() => setDateFilterOption('TODAY')}
                 className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                  dateFilterOption === 'TODAY'
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'text-gray-400 hover:text-blue-300'
+                  dateFilterOption === 'TODAY' ? 'bg-[#2A2A2A] text-blue-400' : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
                 Today
               </button>
               <button
-                onClick={() => setDateFilterOption('YESTERDAY')}
-                className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                  dateFilterOption === 'YESTERDAY'
-                    ? 'bg-purple-600 text-white shadow-xs'
-                    : 'text-gray-400 hover:text-purple-300'
-                }`}
-              >
-                Yesterday
-              </button>
-              <button
                 onClick={() => setDateFilterOption('PAST_7_DAYS')}
                 className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
-                  dateFilterOption === 'PAST_7_DAYS'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-gray-400 hover:text-emerald-300'
+                  dateFilterOption === 'PAST_7_DAYS' ? 'bg-[#2A2A2A] text-blue-400' : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
                 Past 7d
               </button>
-              {hasActiveFilters && (
-                <button
-                  onClick={resetAllFilters}
-                  className="px-2 py-1 rounded text-[11px] font-semibold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition-colors flex items-center gap-1"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  <span>Clear Filters</span>
-                </button>
-              )}
             </div>
+            {hasActiveFilters && (
+              <button
+                onClick={resetAllFilters}
+                className="px-2 py-1 rounded text-[11px] font-semibold bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Clear Filters</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -466,6 +584,12 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                 <X className="w-3 h-3 cursor-pointer hover:text-white" onClick={() => handleSearchChange('')} />
               </span>
             )}
+            {incompleteOnlyFilter && (
+              <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-mono font-bold">
+                ⚠️ Missing Fields Only
+                <X className="w-3 h-3 cursor-pointer hover:text-white" onClick={() => setIncompleteOnlyFilter(false)} />
+              </span>
+            )}
             {categoryFilter !== 'ALL' && (
               <span className="inline-flex items-center gap-1 bg-purple-500/10 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded font-mono">
                 Cat: {categoryFilter}
@@ -506,12 +630,12 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-[#0A0A0A] border-b border-[#222] text-gray-500 font-mono uppercase tracking-wider text-[10px]">
-                <th className="py-3 px-4 w-36 font-medium">Product Code</th>
+                <th className="py-3 px-4 w-40 font-medium">Product Code</th>
                 <th className="py-3 px-4 font-medium">Material / Item Description</th>
-                <th className="py-3 px-3 w-20 font-medium">Type</th>
-                <th className="py-3 px-3 w-28 font-medium">Category</th>
+                <th className="py-3 px-3 w-28 font-medium">Type</th>
+                <th className="py-3 px-3 w-40 font-medium">Category</th>
                 <th className="py-3 px-3 w-20 font-medium">Status</th>
-                <th className="py-3 px-3 w-16 font-medium">Unit</th>
+                <th className="py-3 px-3 w-24 font-medium">Unit</th>
                 <th className="py-3 px-4 w-36 font-medium">Sample Status</th>
                 <th className="py-3 px-4 w-32 font-medium">Date Recorded</th>
               </tr>
@@ -539,17 +663,44 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                   const isRegistered = !!reg;
                   const itemDateStr = extractDateStr(item.createdAt);
                   const primaryPhoto = reg?.photos && reg.photos.length > 0 ? reg.photos[0] : null;
+                  const missingFields = getMissingFields(item);
+                  const isIncomplete = missingFields.length > 0;
+                  const isEditingThis = inlineEdit?.itemId === item.id;
 
                   return (
-                    <tr key={item.id} className="hover:bg-[#1A1A1A] transition-colors group">
-                      {/* 1. Product Code (Hover Flashes Primary Image) */}
+                    <tr key={item.id} className={`transition-colors group ${isIncomplete ? 'bg-amber-500/[0.02] hover:bg-amber-500/[0.05]' : 'hover:bg-[#1A1A1A]'}`}>
+                      {/* 1. Product Code */}
                       <td className="py-3 px-4 font-mono font-bold text-blue-400 relative group/code">
-                        <span className="hover:underline flex items-center gap-1.5 cursor-pointer">
-                          {item.productCode}
-                          {primaryPhoto && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" title="Sample image uploaded"></span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span
+                            onClick={() => onOpenEditModal && onOpenEditModal(item)}
+                            className="hover:underline flex items-center gap-1.5 cursor-pointer"
+                            title="Click to view/edit item details"
+                          >
+                            {item.productCode}
+                            {primaryPhoto && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" title="Sample image uploaded"></span>
+                            )}
+                          </span>
+
+                          {/* Incomplete Warning Badge */}
+                          {isIncomplete && (
+                            <span
+                              onClick={() => {
+                                setInlineEdit({
+                                  itemId: item.id,
+                                  field: !item.category ? 'category' : !item.materialType ? 'materialType' : 'description',
+                                  value: !item.category ? (availableCategories[0] || 'Box') : (item.materialType || 'RM')
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-sans font-bold rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 cursor-pointer hover:bg-amber-500/25"
+                              title={`Missing required fields: ${missingFields.join(', ')}. Click to complete.`}
+                            >
+                              <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                              <span>Missing {missingFields[0]}</span>
+                            </span>
                           )}
-                        </span>
+                        </div>
 
                         {/* Flash Primary Image Tooltip Card on Hover */}
                         <div className="hidden group-hover/code:block absolute left-4 top-full mt-1 z-50 w-56 p-2 bg-[#181818] border border-blue-500/50 rounded-xl shadow-2xl shadow-black animate-in fade-in zoom-in-95 duration-150 pointer-events-none">
@@ -580,32 +731,238 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 4. Description / Item Name */}
+                      {/* 2. Description / Item Name */}
                       <td className="py-3 px-4 text-gray-200 font-medium max-w-xs sm:max-w-md">
-                        <div className="truncate">{item.description}</div>
+                        {isEditingThis && inlineEdit.field === 'description' ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={inlineEdit.value}
+                              onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveInline(item);
+                                if (e.key === 'Escape') setInlineEdit(null);
+                              }}
+                              className="w-full text-xs px-2 py-1 bg-[#1E1E1E] border border-blue-500 text-gray-100 rounded focus:outline-hidden"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleSaveInline(item)}
+                              disabled={isSavingInline}
+                              className="p-1 bg-blue-600 hover:bg-blue-500 text-white rounded cursor-pointer"
+                              title="Save description"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setInlineEdit(null)}
+                              className="p-1 bg-[#2A2A2A] hover:bg-[#333] text-gray-400 rounded cursor-pointer"
+                              title="Cancel"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : !item.description || item.description.trim() === '' ? (
+                          <button
+                            onClick={() => setInlineEdit({ itemId: item.id, field: 'description', value: '' })}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-amber-500/15 text-amber-300 border border-dashed border-amber-500/50 hover:bg-amber-500/25 hover:border-amber-400 transition-all cursor-pointer shadow-xs"
+                            title="Missing Description - Click to Add"
+                          >
+                            <Plus className="w-3 h-3 text-amber-400" />
+                            <span>+ ADD</span>
+                          </button>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2 group/desc">
+                            <span className="truncate">{item.description}</span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => setInlineEdit({ itemId: item.id, field: 'description', value: item.description })}
+                                className="opacity-0 group-hover/desc:opacity-100 p-1 text-gray-500 hover:text-gray-200 hover:bg-[#2A2A2A] rounded transition-opacity cursor-pointer shrink-0"
+                                title="Quick Edit Description"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
 
-                      {/* 5. Material Type */}
+                      {/* 3. Material Type */}
                       <td className="py-3 px-3 font-mono">
-                        <span
-                          className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded ${
-                            (item.materialType || item.category) === 'PS'
-                              ? 'bg-purple-500/10 text-purple-400 border border-purple-900/40'
-                              : 'bg-blue-500/10 text-blue-400 border border-blue-900/40'
-                          }`}
-                        >
-                          {item.materialType || ((item.category === 'RM' || item.category === 'PS') ? item.category : 'RM')}
-                        </span>
+                        {isEditingThis && inlineEdit.field === 'materialType' ? (
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={inlineEdit.value}
+                              onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                              className="text-xs px-1.5 py-1 bg-[#1E1E1E] border border-blue-500 text-gray-100 rounded focus:outline-hidden"
+                              autoFocus
+                            >
+                              <option value="RM">RM</option>
+                              <option value="PS">PS</option>
+                            </select>
+                            <button
+                              onClick={() => handleSaveInline(item)}
+                              disabled={isSavingInline}
+                              className="p-1 bg-blue-600 hover:bg-blue-500 text-white rounded cursor-pointer"
+                            >
+                              <Check className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => setInlineEdit(null)}
+                              className="p-1 bg-[#2A2A2A] hover:bg-[#333] text-gray-400 rounded cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : !item.materialType ? (
+                          <button
+                            onClick={() => setInlineEdit({ itemId: item.id, field: 'materialType', value: 'RM' })}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-dashed border-amber-500/50 hover:bg-amber-500/25 hover:border-amber-400 transition-all cursor-pointer shadow-xs"
+                            title="Missing Material Type - Click to Add"
+                          >
+                            <Plus className="w-3 h-3 text-amber-400" />
+                            <span>+ ADD</span>
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1 group/type">
+                            <span
+                              className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded ${
+                                item.materialType === 'PS'
+                                  ? 'bg-purple-500/10 text-purple-400 border border-purple-900/40'
+                                  : 'bg-blue-500/10 text-blue-400 border border-blue-900/40'
+                              }`}
+                            >
+                              {item.materialType}
+                            </span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => setInlineEdit({ itemId: item.id, field: 'materialType', value: item.materialType || 'RM' })}
+                                className="opacity-0 group-hover/type:opacity-100 p-0.5 text-gray-500 hover:text-gray-200 hover:bg-[#2A2A2A] rounded transition-opacity cursor-pointer"
+                                title="Edit Material Type"
+                              >
+                                <Edit2 className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
 
-                      {/* 6. Dynamic Category */}
+                      {/* 4. Dynamic Category (Includes Inline + ADD for empty category) */}
                       <td className="py-3 px-3">
-                        <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded bg-[#1C1C1C] text-gray-300 border border-[#333] max-w-[120px] truncate">
-                          {item.category || 'Box'}
-                        </span>
+                        {isEditingThis && inlineEdit.field === 'category' ? (
+                          <div className="flex flex-col gap-1.5 min-w-[170px] bg-[#181818] p-2 rounded-lg border border-blue-500/50 shadow-xl">
+                            {!inlineEdit.isCustom ? (
+                              <div className="flex items-center gap-1">
+                                <select
+                                  value={inlineEdit.value}
+                                  onChange={(e) => {
+                                    if (e.target.value === '__NEW__') {
+                                      setInlineEdit({ ...inlineEdit, isCustom: true, customInput: '' });
+                                    } else {
+                                      setInlineEdit({ ...inlineEdit, value: e.target.value });
+                                    }
+                                  }}
+                                  className="w-full text-xs px-2 py-1 bg-[#1E1E1E] border border-[#444] text-gray-100 rounded focus:outline-hidden focus:border-blue-500"
+                                  autoFocus
+                                >
+                                  <option value="">-- Choose Category --</option>
+                                  {availableCategories.map((c) => (
+                                    <option key={c} value={c}>{c}</option>
+                                  ))}
+                                  <option value="__NEW__" className="text-blue-400 font-semibold">+ New Category...</option>
+                                </select>
+                              </div>
+                            ) : (
+                              <input
+                                type="text"
+                                placeholder="Type new category..."
+                                value={inlineEdit.customInput || ''}
+                                onChange={(e) => setInlineEdit({ ...inlineEdit, customInput: e.target.value })}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveInline(item);
+                                  if (e.key === 'Escape') setInlineEdit(null);
+                                }}
+                                className="w-full text-xs px-2 py-1 bg-[#1E1E1E] border border-blue-500 text-gray-100 rounded focus:outline-hidden"
+                                autoFocus
+                              />
+                            )}
+
+                            {inlineSaveError && (
+                              <span className="text-[10px] text-red-400 leading-tight">{inlineSaveError}</span>
+                            )}
+
+                            <div className="flex items-center justify-end gap-1 pt-0.5">
+                              {inlineEdit.isCustom && (
+                                <button
+                                  type="button"
+                                  onClick={() => setInlineEdit({ ...inlineEdit, isCustom: false, value: availableCategories[0] || 'Box' })}
+                                  className="text-[10px] text-gray-400 hover:text-gray-200 mr-auto underline"
+                                >
+                                  List
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setInlineEdit(null)}
+                                className="px-2 py-0.5 text-[11px] bg-[#2A2A2A] hover:bg-[#333] text-gray-400 rounded cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveInline(item)}
+                                disabled={isSavingInline}
+                                className="px-2 py-0.5 text-[11px] bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded cursor-pointer flex items-center gap-1"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Save</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : !item.category || item.category.trim() === '' ? (
+                          <button
+                            onClick={() => {
+                              setInlineEdit({
+                                itemId: item.id,
+                                field: 'category',
+                                value: availableCategories[0] || 'Box',
+                                isCustom: false,
+                                customInput: ''
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded bg-amber-500/15 text-amber-300 border border-dashed border-amber-500/50 hover:bg-amber-500/25 hover:border-amber-400 transition-all cursor-pointer shadow-xs group/btn"
+                            title="Missing Category - Click to quickly add inline"
+                          >
+                            <Plus className="w-3 h-3 text-amber-400 group-hover/btn:scale-110 transition-transform" />
+                            <span>+ ADD</span>
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1 group/cat">
+                            <span className="inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded bg-[#1C1C1C] text-gray-300 border border-[#333] max-w-[130px] truncate">
+                              {item.category}
+                            </span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => {
+                                  setInlineEdit({
+                                    itemId: item.id,
+                                    field: 'category',
+                                    value: item.category,
+                                    isCustom: false,
+                                    customInput: ''
+                                  });
+                                }}
+                                className="opacity-0 group-hover/cat:opacity-100 p-0.5 text-gray-500 hover:text-gray-200 hover:bg-[#2A2A2A] rounded transition-opacity cursor-pointer"
+                                title="Edit Category"
+                              >
+                                <Edit2 className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
 
-                      {/* 6. Status */}
+                      {/* 5. Status */}
                       <td className="py-3 px-3 font-mono">
                         <span
                           className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded ${
@@ -623,16 +980,70 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                         </span>
                       </td>
 
-                      {/* 7. Unit */}
+                      {/* 6. Unit (Includes Inline + ADD for empty unit) */}
                       <td className="py-3 px-3 text-gray-400 font-mono">
-                        {item.unit || <span className="text-gray-600 italic">-</span>}
+                        {isEditingThis && inlineEdit.field === 'unit' ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="text"
+                              placeholder="e.g. pcs"
+                              value={inlineEdit.value}
+                              onChange={(e) => setInlineEdit({ ...inlineEdit, value: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveInline(item);
+                                if (e.key === 'Escape') setInlineEdit(null);
+                              }}
+                              className="w-16 text-xs px-1.5 py-0.5 bg-[#1E1E1E] border border-blue-500 text-gray-100 rounded focus:outline-hidden font-mono"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleSaveInline(item)}
+                              disabled={isSavingInline}
+                              className="p-1 bg-blue-600 hover:bg-blue-500 text-white rounded cursor-pointer"
+                            >
+                              <Check className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => setInlineEdit(null)}
+                              className="p-1 bg-[#2A2A2A] hover:bg-[#333] text-gray-400 rounded cursor-pointer"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : !item.unit || item.unit.trim() === '' ? (
+                          <button
+                            onClick={() => setInlineEdit({ itemId: item.id, field: 'unit', value: 'pcs' })}
+                            className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-dashed border-blue-500/40 hover:bg-blue-500/20 hover:border-blue-400 transition-all cursor-pointer"
+                            title="Add Unit (Optional reference)"
+                          >
+                            <Plus className="w-2.5 h-2.5" />
+                            <span>+ ADD</span>
+                          </button>
+                        ) : (
+                          <div className="flex items-center gap-1 group/unit">
+                            <span>{item.unit}</span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => setInlineEdit({ itemId: item.id, field: 'unit', value: item.unit || '' })}
+                                className="opacity-0 group-hover/unit:opacity-100 p-0.5 text-gray-500 hover:text-gray-200 hover:bg-[#2A2A2A] rounded transition-opacity cursor-pointer"
+                                title="Edit Unit"
+                              >
+                                <Edit2 className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
 
-                      {/* 8. Sample Registration Badge */}
+                      {/* 7. Sample Registration Badge */}
                       <td className="py-3 px-4">
                         {isRegistered ? (
                           <div className="flex flex-col items-start gap-1">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">
+                            <span
+                              onClick={() => onViewReference && onViewReference(reg)}
+                              className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20 cursor-pointer hover:bg-green-500/20 transition-colors"
+                              title="Click to view reference details"
+                            >
                               <ShieldCheck className="w-3 h-3 text-green-400" />
                               <span>{reg.revision} ({reg.registrationDate})</span>
                             </span>
@@ -644,13 +1055,17 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
                             )}
                           </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                          <button
+                            onClick={() => handleAttemptRegister(item)}
+                            className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20 transition-colors cursor-pointer"
+                            title="Register reference sample for this item"
+                          >
                             <span>Pending Sample</span>
-                          </span>
+                          </button>
                         )}
                       </td>
 
-                      {/* 9. Date Recorded */}
+                      {/* 8. Date Recorded */}
                       <td className="py-3 px-4 font-mono text-[11px] text-gray-400">
                         {itemDateStr || <span className="text-gray-600">-</span>}
                       </td>
@@ -667,13 +1082,88 @@ export const MasterItemsView: React.FC<MasterItemsViewProps> = ({
           <div>
             Showing <strong className="text-gray-300">{filteredItems.length}</strong> of {masterItems.length} master reference items
             {hasActiveFilters && <span className="text-blue-400 ml-1.5">(Filtered)</span>}
+            {incompleteItemsCount > 0 && (
+              <span className="text-amber-400 ml-2 font-bold">
+                • {incompleteItemsCount} incomplete {incompleteItemsCount === 1 ? 'item' : 'items'} need Category or details
+              </span>
+            )}
           </div>
           <div className="text-[11px] text-gray-600">
             Zero inventory policy • SQLite Indexed
           </div>
         </div>
       </div>
+
+      {/* Pop-up Modal: Incomplete Item Record Validation */}
+      {incompleteModalInfo && incompleteModalInfo.isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#181818] rounded-xl border border-amber-500/40 shadow-2xl p-6 max-w-md w-full text-center space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="mx-auto w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center text-amber-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+
+            <div className="space-y-1.5">
+              <h4 className="text-sm font-bold text-gray-100 uppercase tracking-wide font-mono">
+                Validation Control Alert
+              </h4>
+              <p className="text-sm font-bold text-amber-300">
+                Item details must be fully completed before proceeding.
+              </p>
+              <p className="text-xs text-gray-400 leading-relaxed pt-1">
+                The master item <span className="font-mono font-bold text-blue-400">"{incompleteModalInfo.item?.productCode}"</span> is missing required information:
+              </p>
+            </div>
+
+            <div className="bg-[#111] p-3 rounded-lg border border-[#282828] text-left space-y-1.5">
+              <div className="text-[11px] text-gray-400 font-semibold font-mono">Missing Required Fields:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {incompleteModalInfo.missingFields.map((field) => (
+                  <span
+                    key={field}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono font-bold"
+                  >
+                    <AlertCircle className="w-3 h-3 text-amber-400" />
+                    {field}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-500 pt-1">
+                All materials in the reference database must have an assigned Category classification before reference specimens can be registered, approved, or exported.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setIncompleteModalInfo(null)}
+                className="flex-1 py-2 bg-[#252525] hover:bg-[#2E2E2E] text-gray-300 font-semibold text-xs rounded-lg transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+              {incompleteModalInfo.item && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const itm = incompleteModalInfo.item!;
+                    setIncompleteModalInfo(null);
+                    setInlineEdit({
+                      itemId: itm.id,
+                      field: 'category',
+                      value: availableCategories[0] || 'Box',
+                      isCustom: false,
+                      customInput: ''
+                    });
+                  }}
+                  className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer shadow-md flex items-center justify-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ ADD Missing Data</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
-

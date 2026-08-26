@@ -96,6 +96,8 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showDuplicatePop, setShowDuplicatePop] = useState(false);
   const [duplicateCode, setDuplicateCode] = useState('');
+  const [showIncompletePop, setShowIncompletePop] = useState(false);
+  const [incompleteMissingFields, setIncompleteMissingFields] = useState<string[]>([]);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -373,12 +375,17 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedProductCode.trim()) {
-      setError('Please enter a Product Code.');
-      return;
-    }
-    if (!registeredBy.trim()) {
-      setError('Registered By is mandatory to track the person who entered the sample.');
+    const finalCategory = isCustomCategory ? customCategoryName.trim() : category.trim();
+    const missing: string[] = [];
+    if (!selectedProductCode.trim()) missing.push('Product Code');
+    if (!finalCategory) missing.push('Category');
+    if (!materialType) missing.push('Material Type');
+    if (!registeredBy.trim()) missing.push('Registered By');
+
+    if (missing.length > 0) {
+      setIncompleteMissingFields(missing);
+      setShowIncompletePop(true);
+      setError('Item details must be fully completed before proceeding.');
       return;
     }
 
@@ -398,12 +405,6 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
 
     // Selected print photo IDs
     const selectedPrintPhotoIds = photos.filter(p => p.includeInPrint).map(p => p.id);
-    const finalCategory = isCustomCategory ? customCategoryName.trim() : category.trim();
-    if (!finalCategory) {
-      setError('Category is required. Please select an existing category or enter a new custom category.');
-      setIsSubmitting(false);
-      return;
-    }
 
     const currentUser = userService.getCurrentUser();
     const isAdmin = currentUser?.role === 'admin';
@@ -1152,6 +1153,48 @@ export const ReferenceRegistrationModal: React.FC<ReferenceRegistrationModalProp
               className="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-lg transition-colors cursor-pointer"
             >
               OK, I Understand
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showIncompletePop && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-[#1C1C1C] rounded-xl border border-amber-500/50 shadow-2xl p-6 max-w-md w-full text-center space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="mx-auto w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-full flex items-center justify-center text-amber-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h4 className="text-sm font-bold text-gray-100 uppercase tracking-wide font-mono">Validation Control Block</h4>
+              <p className="text-sm font-bold text-amber-300">
+                Item details must be fully completed before proceeding.
+              </p>
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Submission was blocked because the following required fields are missing:
+              </p>
+            </div>
+            <div className="bg-[#121212] p-3 rounded-lg border border-[#262626] text-left">
+              <div className="text-[11px] font-semibold text-gray-400 font-mono mb-1.5">Required Missing Fields:</div>
+              <div className="flex flex-wrap gap-1.5">
+                {incompleteMissingFields.map((field) => (
+                  <span
+                    key={field}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-mono font-bold"
+                  >
+                    • {field}
+                  </span>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-2">
+                All reference items require complete classification (including Category) before processing can occur.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowIncompletePop(false)}
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-lg transition-colors cursor-pointer shadow-md"
+            >
+              I Will Complete Missing Details
             </button>
           </div>
         </div>
