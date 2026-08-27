@@ -9,6 +9,60 @@
     <meta property="og:description" content="Material Inspection & Reference Management System - Specimen catalog, quality specifications, and Word DOCX registry." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // Early polyfill for ES2024 global Iterator object & helper methods (pdfjs-dist & modern bundlers)
+      (function() {
+        try {
+          var root = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof self !== 'undefined' ? self : {};
+          var proto = {};
+          if (typeof Symbol !== 'undefined' && Symbol.iterator && typeof Array.prototype[Symbol.iterator] === 'function') {
+            try {
+              var arrIter = [][Symbol.iterator]();
+              var genProto = Object.getPrototypeOf(arrIter);
+              proto = Object.getPrototypeOf(genProto) || genProto || {};
+            } catch (e) {}
+          }
+          var IteratorCtor = root.Iterator;
+          if (typeof IteratorCtor === 'undefined') {
+            IteratorCtor = function Iterator() {};
+            IteratorCtor.prototype = proto;
+            root.Iterator = IteratorCtor;
+          } else if (!IteratorCtor.prototype) {
+            IteratorCtor.prototype = proto;
+          }
+          if (typeof window !== 'undefined') window.Iterator = IteratorCtor;
+          if (typeof global !== 'undefined') global.Iterator = IteratorCtor;
+
+          var targetProto = IteratorCtor.prototype || proto;
+          if (typeof targetProto.map !== 'function') {
+            targetProto.map = function*(fn) { for (var item of this) yield fn(item); };
+          }
+          if (typeof targetProto.filter !== 'function') {
+            targetProto.filter = function*(fn) { for (var item of this) { if (fn(item)) yield item; } };
+          }
+          if (typeof targetProto.take !== 'function') {
+            targetProto.take = function*(n) { var c = 0; for (var item of this) { if (c++ >= n) break; yield item; } };
+          }
+          if (typeof targetProto.drop !== 'function') {
+            targetProto.drop = function*(n) { var c = 0; for (var item of this) { if (c++ >= n) yield item; } };
+          }
+          if (typeof targetProto.toArray !== 'function') {
+            targetProto.toArray = function() { return Array.from(this); };
+          }
+          if (typeof targetProto.every !== 'function') {
+            targetProto.every = function(fn) { for (var item of this) { if (!fn(item)) return false; } return true; };
+          }
+          if (typeof targetProto.some !== 'function') {
+            targetProto.some = function(fn) { for (var item of this) { if (fn(item)) return true; } return false; };
+          }
+          if (typeof targetProto.join !== 'function') {
+            targetProto.join = function(sep) { return Array.from(this).join(sep === undefined ? ',' : sep); };
+          }
+        } catch (err) {
+          console.warn('Early iterator polyfill setup notice:', err);
+        }
+      })();
+    </script>
     <style>
       /* Fallback inline styles for initial load or JS crash on older PCs */
       .fallback-container {
